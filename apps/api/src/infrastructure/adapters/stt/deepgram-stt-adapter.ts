@@ -18,7 +18,11 @@ export class DeepgramSttAdapter implements ISttProvider {
         audioBuffer,
         {
           model: "nova-3",
+          language: env.DEEPGRAM_LANGUAGE,
           smart_format: true,
+          punctuate: true,
+          // Audio arrives as WAV (created by float32ToWav in the frontend hook)
+          // Deepgram reads the WAV header — no encoding/sample_rate params needed
         },
         { abortSignal: signal },
       );
