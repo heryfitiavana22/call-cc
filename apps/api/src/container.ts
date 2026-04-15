@@ -1,9 +1,10 @@
-import { DeepgramSttAdapter } from "@/infrastructure/adapters/stt/deepgram-stt-adapter";
 import { OpenAITtsAdapter } from "@/infrastructure/adapters/tts/openai-tts-adapter";
 import { OpenAILlmAdapter } from "@/infrastructure/adapters/llm/openai-llm-adapter";
 import { StartVoiceSession } from "@/application/use-cases/start-voice-session";
 import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
+// import { GroqSttAdapter } from "./infrastructure/adapters/stt/groq-stt-adapter";
+import { DeepgramSttAdapter } from "./infrastructure/adapters/stt/deepgram-stt-adapter";
 
 /**
  * Dependency container — instantiates and injects adapters into use cases.
@@ -14,6 +15,7 @@ import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
  */
 const buildContainer = () => {
   // Providers — swap here to change implementation
+  // const stt = new GroqSttAdapter();
   const stt = new DeepgramSttAdapter();
   const tts = new OpenAITtsAdapter();
   const llm = new OpenAILlmAdapter();

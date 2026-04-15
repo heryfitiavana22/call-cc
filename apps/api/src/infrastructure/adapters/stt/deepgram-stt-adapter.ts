@@ -1,116 +1,82 @@
-import { DeepgramClient } from "@deepgram/sdk";
+import { DeepgramClient, type Deepgram } from "@deepgram/sdk";
 import type { Result } from "@call-cc/types";
 import { ok, err } from "@call-cc/types";
 import type { ISttProvider, ISttStream } from "@/domain/ports/i-stt-provider";
 import { Transcript } from "@/domain/value-objects/transcript";
 import { env } from "@/config/env";
 
-type DeepgramConn = Awaited<ReturnType<DeepgramClient["listen"]["v1"]["connect"]>>;
+/** Returns true if the buffer starts with the WAV/RIFF magic bytes. */
+const isWav = (buf: ArrayBuffer): boolean => {
+  if (buf.byteLength < 4) return false;
+  const v = new Uint8Array(buf, 0, 4);
+  return v[0] === 0x52 && v[1] === 0x49 && v[2] === 0x46 && v[3] === 0x46; // "RIFF"
+};
 
 /**
- * Streaming STT stream backed by Deepgram's live WebSocket API.
+ * Buffered STT stream backed by Deepgram's batch transcription API.
  *
- * - Audio chunks are forwarded immediately once the socket is open.
- * - Chunks that arrive before the socket opens are queued and flushed on open.
- * - finalize() sends a Finalize control message and waits for socket close,
- *   collecting all is_final transcript fragments along the way.
+ * Audio chunks are accumulated locally; finalize() sends the merged buffer
+ * as a single transcribeFile() request — the same proven approach as the
+ * original one-shot adapter, wrapped in the ISttStream interface so the
+ * adapter can be swapped for a true live-streaming implementation later.
  */
 class DeepgramSttStream implements ISttStream {
-  private conn: DeepgramConn | null = null;
-  private pending: ArrayBuffer[] = [];
-  private parts: string[] = [];
+  private chunks: ArrayBuffer[] = [];
   private aborted = false;
-  private closeCallbacks: Array<() => void> = [];
-  private errorCallbacks: Array<(e: Error) => void> = [];
 
-  constructor(private readonly connPromise: Promise<DeepgramConn>) {
-    connPromise
-      .then(async (conn) => {
-        if (this.aborted) {
-          conn.close();
-          return;
-        }
-
-        // Register handlers before waitForOpen so we never miss a close/error
-        conn.on("message", (msg) => {
-          if (msg.type === "Results" && msg.is_final) {
-            const text = msg.channel?.alternatives?.[0]?.transcript;
-            if (text) this.parts.push(text);
-          }
-        });
-
-        conn.on("close", () => {
-          for (const cb of this.closeCallbacks) cb();
-        });
-
-        conn.on("error", (e) => {
-          const error = e instanceof Error ? e : new Error(String(e));
-          for (const cb of this.errorCallbacks) cb(error);
-        });
-
-        // Wait for the WebSocket handshake to complete before sending anything
-        await conn.waitForOpen();
-
-        if (this.aborted) {
-          conn.close();
-          return;
-        }
-
-        this.conn = conn;
-
-        // Flush chunks that arrived before the socket was ready
-        for (const chunk of this.pending) conn.sendMedia(chunk);
-        this.pending = [];
-      })
-      .catch((e) => {
-        const error = e instanceof Error ? e : new Error(String(e));
-        for (const cb of this.errorCallbacks) cb(error);
-      });
-  }
+  constructor(
+    private readonly client: DeepgramClient,
+    private readonly language: string,
+  ) {}
 
   write(chunk: ArrayBuffer): void {
     if (this.aborted) return;
-    // this.conn is only set after waitForOpen() — safe to call sendMedia directly
-    if (this.conn) {
-      this.conn.sendMedia(chunk);
-    } else {
-      this.pending.push(chunk);
-    }
+    this.chunks.push(chunk);
   }
 
-  finalize(): Promise<Result<Transcript>> {
-    if (this.aborted) return Promise.resolve(ok(new Transcript("")));
+  async finalize(): Promise<Result<Transcript>> {
+    if (this.aborted || this.chunks.length === 0) return ok(new Transcript(""));
 
-    return new Promise((resolve) => {
-      this.closeCallbacks.push(() => {
-        resolve(ok(new Transcript(this.parts.join(" "))));
-      });
-      this.errorCallbacks.push((e) => {
-        resolve(err(e));
+    // Merge all accumulated chunks into one buffer
+    const totalBytes = this.chunks.reduce((sum, c) => sum + c.byteLength, 0);
+    const merged = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      merged.set(new Uint8Array(chunk), offset);
+      offset += chunk.byteLength;
+    }
+    this.chunks = [];
+
+    const buffer = merged.buffer;
+
+    try {
+      const response = await this.client.listen.v1.media.transcribeFile(buffer, {
+        model: "nova-3",
+        language: this.language,
+        smart_format: true,
+        punctuate: true,
+        // If the client sends a WAV, Deepgram reads the header automatically.
+        // If it sends raw PCM (no RIFF header), we specify the encoding explicitly.
+        ...(isWav(buffer) ? {} : { encoding: "linear16", sample_rate: 16000 }),
       });
 
-      // Wait until the socket is fully open (pending flush done), then close the stream.
-      // sendCloseStream tells Deepgram to flush remaining audio, emit final results,
-      // and close the connection — which triggers the 'close' event we await above.
-      this.connPromise
-        .then(async (conn) => {
-          await conn.waitForOpen();
-          conn.sendCloseStream({ type: "CloseStream" });
-        })
-        .catch((e) => {
-          resolve(err(e instanceof Error ? e : new Error(String(e))));
-        });
-    });
+      if (!("results" in response)) {
+        return err(
+          new Error("Deepgram returned an async response — synchronous transcription expected"),
+        );
+      }
+
+      const syncResponse = response as Deepgram.ListenV1Response;
+      const transcript = syncResponse.results.channels[0]?.alternatives?.[0]?.transcript ?? "";
+      return ok(new Transcript(transcript));
+    } catch (e) {
+      return err(e instanceof Error ? e : new Error(String(e)));
+    }
   }
 
   abort(): void {
     this.aborted = true;
-    this.pending = [];
-    try {
-      this.conn?.close();
-    } catch {
-      // ignore close errors
-    }
+    this.chunks = [];
   }
 }
 
@@ -122,17 +88,6 @@ export class DeepgramSttAdapter implements ISttProvider {
   }
 
   createStream(): ISttStream {
-    const connPromise = this.client.listen.v1.connect({
-      Authorization: `Token ${env.DEEPGRAM_API_KEY}`,
-      model: "nova-3",
-      language: env.DEEPGRAM_LANGUAGE,
-      smart_format: "true",
-      punctuate: "true",
-      interim_results: "false",
-      encoding: "linear16",
-      sample_rate: 16000,
-    }) as Promise<DeepgramConn>;
-
-    return new DeepgramSttStream(connPromise);
+    return new DeepgramSttStream(this.client, env.DEEPGRAM_LANGUAGE ?? "fr");
   }
 }
