@@ -1,7 +1,7 @@
 import type { WSContext } from "hono/ws";
 import type { ClientMessage, ServerMessage } from "@call-cc/types";
 import { clientMessageSchema } from "@call-cc/types";
-import type { ProcessAudioChunk } from "@/application/use-cases/process-audio-chunk";
+import type { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 import type { StartVoiceSession } from "@/application/use-cases/start-voice-session";
 import type { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 import type { VoiceSession } from "@/domain/entities/voice-session";
@@ -15,30 +15,14 @@ const generateSessionId = (): string =>
     .toString(36)
     .slice(2, 2 + SESSION_ID_LENGTH);
 
-/**
- * Concatenates an array of ArrayBuffers into a single ArrayBuffer.
- */
-const mergeBuffers = (chunks: ArrayBuffer[]): ArrayBuffer => {
-  const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
-  const merged = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(new Uint8Array(chunk), offset);
-    offset += chunk.byteLength;
-  }
-  return merged.buffer;
-};
-
 export class AudioStreamHandler {
   private session: VoiceSession | null = null;
   private abortController: AbortController = new AbortController();
   private history: LlmMessage[] = [];
-  // Audio chunks accumulated between speech.start and speech.end
-  private audioChunks: ArrayBuffer[] = [];
 
   constructor(
     private readonly startVoiceSession: StartVoiceSession,
-    private readonly processAudioChunk: ProcessAudioChunk,
+    private readonly voiceTurn: ProcessVoiceTurn,
     private readonly endVoiceSession: EndVoiceSession,
   ) {}
 
@@ -51,6 +35,7 @@ export class AudioStreamHandler {
     }
     this.session = result.value;
     logger.info({ sessionId: this.session.id }, "Voice session opened");
+    this.voiceTurn.begin();
     this.send(ws, { type: "session.started" });
     this.send(ws, { type: "ready" });
   }
@@ -76,46 +61,29 @@ export class AudioStreamHandler {
       this.session = null;
     }
     this.abortController.abort();
-    this.audioChunks = [];
+    this.voiceTurn.abort();
   }
 
-  /**
-   * Accumulates raw audio chunks into a buffer.
-   * The buffer is flushed when speech.end is received.
-   */
   private handleAudioChunk(chunk: ArrayBuffer): void {
     if (!this.session || this.session.state !== "listening") return;
-    this.audioChunks.push(chunk);
+    this.voiceTurn.addChunk(chunk);
   }
 
-  /**
-   * Merges the accumulated audio buffer and triggers STT → LLM → TTS pipeline.
-   */
   private async handleSpeechEnd(ws: WSContext): Promise<void> {
-    if (!this.session || this.audioChunks.length === 0) {
+    if (!this.session) {
       this.send(ws, { type: "ready" });
       return;
     }
 
-    const audioBuffer = mergeBuffers(this.audioChunks);
-    this.audioChunks = [];
-
-    // Capture the signal now — an interrupt may replace abortController before execute() returns
+    // Capture the signal now — a barge-in may replace abortController before end() returns
     const signal = this.abortController.signal;
 
-    const result = await this.processAudioChunk.execute(
-      this.session,
-      audioBuffer,
-      [...this.history], // snapshot — prevents callee from observing future mutations
-      signal,
-      {
-        onTranscript: (text) => this.send(ws, { type: "transcript", text, final: true }),
-        onAudioChunk: (audio) => ws.send(audio),
-      },
-    );
+    const result = await this.voiceTurn.end(this.session, [...this.history], signal, {
+      onTranscript: (text) => this.send(ws, { type: "transcript", text, final: true }),
+      onAudioChunk: (audio) => ws.send(audio),
+    });
 
     if (!result.ok) {
-      // Barge-in aborted this operation — interrupt handler already reset the session
       if (signal.aborted) return;
       this.send(ws, { type: "error", message: result.error.message });
       this.send(ws, { type: "ready" });
@@ -123,12 +91,13 @@ export class AudioStreamHandler {
       return;
     }
 
-    // Only push non-empty exchanges to history
     if (result.value.transcript) {
       this.history.push({ role: "user", content: result.value.transcript });
       this.history.push({ role: "assistant", content: result.value.agentReply });
     }
 
+    // Open a new stream for the next utterance
+    this.voiceTurn.begin();
     this.send(ws, { type: "ready" });
     this.session.transition("listening");
   }
@@ -143,7 +112,8 @@ export class AudioStreamHandler {
       logger.info({ sessionId: this.session?.id }, "Barge-in interrupt received");
       this.abortController.abort();
       this.abortController = new AbortController();
-      this.audioChunks = [];
+      this.voiceTurn.abort();
+      this.voiceTurn.begin();
       if (this.session) this.session.transition("listening");
       this.send(ws, { type: "ready" });
       return;

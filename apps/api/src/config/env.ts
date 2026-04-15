@@ -9,7 +9,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
 
   // STT
-  DEEPGRAM_API_KEY: z.string().min(1, "DEEPGRAM_API_KEY is required"),
+  DEEPGRAM_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
   // BCP-47 language code for transcription (e.g. "fr", "en", "es").
   // Set to "multi" to use nova-3's multilingual mode.
   DEEPGRAM_LANGUAGE: z.string().default("fr"),

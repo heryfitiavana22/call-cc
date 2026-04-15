@@ -15,7 +15,7 @@ export const createVoiceRoute = (
     upgradeWebSocket(() => {
       const handler = new AudioStreamHandler(
         container.startVoiceSession,
-        container.processAudioChunk,
+        container.createProcessVoiceTurn(),
         container.endVoiceSession,
       );
 

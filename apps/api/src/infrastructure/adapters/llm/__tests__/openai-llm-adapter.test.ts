@@ -36,7 +36,7 @@ describe.skipIf(!hasRealKey)("OpenAILlmAdapter (integration)", () => {
     let caughtError: unknown = null;
 
     try {
-      for await (const token of adapter.stream(longMessages, [], controller.signal)) {
+      for await (const _token of adapter.stream(longMessages, [], controller.signal)) {
         tokenCount++;
         if (tokenCount >= 3) controller.abort();
       }

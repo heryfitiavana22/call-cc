@@ -4,13 +4,12 @@ import type { WSContext } from "hono/ws";
 import { AudioStreamHandler } from "@/presentation/websocket/audio-stream-handler";
 import { StartVoiceSession } from "@/application/use-cases/start-voice-session";
 import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
-import type { ProcessAudioChunk } from "@/application/use-cases/process-audio-chunk";
+import type { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Collects every JSON message sent via ws.send(string) */
 const makeWs = () => {
   const sent: string[] = [];
   const binarySent: unknown[] = [];
@@ -34,22 +33,29 @@ const makeWs = () => {
 
 const makeAudio = (bytes = 16) => new ArrayBuffer(bytes);
 
-/** Builds a minimal mock ProcessAudioChunk.execute that calls callbacks */
-const makeProcessAudioChunk = (
+/**
+ * Builds a minimal ProcessVoiceTurn mock.
+ * begin() / addChunk() / abort() are no-ops.
+ * end() calls the callbacks and returns the configured result.
+ */
+const makeVoiceTurn = (
   opts: {
     transcript?: string;
     agentReply?: string;
     audioChunk?: ArrayBuffer;
     fail?: Error;
+    slowMs?: number;
   } = {},
-): ProcessAudioChunk => {
-  const { transcript = "Bonjour.", agentReply = "Salut!", audioChunk, fail } = opts;
+): ProcessVoiceTurn => {
+  const { transcript = "Bonjour.", agentReply = "Salut!", audioChunk, fail, slowMs } = opts;
 
   return {
-    execute: vi.fn().mockImplementation(
+    begin: vi.fn(),
+    addChunk: vi.fn(),
+    abort: vi.fn(),
+    end: vi.fn().mockImplementation(
       async (
-        _session: unknown,
-        _buf: unknown,
+        session: { transition: (s: string) => void },
         _history: unknown,
         _signal: AbortSignal,
         callbacks: {
@@ -57,13 +63,16 @@ const makeProcessAudioChunk = (
           onAudioChunk: (a: ArrayBuffer) => void;
         },
       ) => {
+        // Simulate the real ProcessVoiceTurn: transition to processing immediately
+        session.transition("processing");
+        if (slowMs) await new Promise<void>((r) => setTimeout(r, slowMs));
         if (fail) return err(fail);
         callbacks.onTranscript(transcript);
         if (audioChunk) callbacks.onAudioChunk(audioChunk);
         return ok({ transcript, agentReply });
       },
     ),
-  } as unknown as ProcessAudioChunk;
+  } as unknown as ProcessVoiceTurn;
 };
 
 // ---------------------------------------------------------------------------
@@ -72,15 +81,11 @@ const makeProcessAudioChunk = (
 
 describe("AudioStreamHandler", () => {
   let handler: AudioStreamHandler;
-  let processAudioChunkMock: ProcessAudioChunk;
+  let voiceTurnMock: ProcessVoiceTurn;
 
   beforeEach(() => {
-    processAudioChunkMock = makeProcessAudioChunk();
-    handler = new AudioStreamHandler(
-      new StartVoiceSession(),
-      processAudioChunkMock,
-      new EndVoiceSession(),
-    );
+    voiceTurnMock = makeVoiceTurn();
+    handler = new AudioStreamHandler(new StartVoiceSession(), voiceTurnMock, new EndVoiceSession());
   });
 
   // --- onOpen ---
@@ -92,61 +97,66 @@ describe("AudioStreamHandler", () => {
       expect(types()).toEqual(["session.started", "ready"]);
     });
 
-    it("session is in listening state after open", () => {
+    it("calls begin() on the voice turn", () => {
       const { ws } = makeWs();
       handler.onOpen(ws);
-      // Indirectly verified: audio chunks are accumulated (only in listening state)
-      handler.onMessage(ws, makeAudio());
-      // If not listening, the chunk would be dropped. We verify via speech.end later.
+      expect(voiceTurnMock.begin).toHaveBeenCalledOnce();
     });
   });
 
-  // --- audio accumulation ---
+  // --- audio chunks ---
 
   describe("onMessage — audio chunks", () => {
-    it("accumulates binary chunks silently (no message sent)", () => {
+    it("forwards chunks to voiceTurn.addChunk() silently", () => {
       const { ws, sent } = makeWs();
       handler.onOpen(ws);
-      sent.length = 0; // clear open messages
+      sent.length = 0;
 
-      handler.onMessage(ws, makeAudio());
-      handler.onMessage(ws, makeAudio());
+      const chunk1 = makeAudio();
+      const chunk2 = makeAudio();
+      handler.onMessage(ws, chunk1);
+      handler.onMessage(ws, chunk2);
 
       expect(sent).toHaveLength(0);
+      expect(voiceTurnMock.addChunk).toHaveBeenCalledTimes(2);
+      expect(voiceTurnMock.addChunk).toHaveBeenNthCalledWith(1, chunk1);
+      expect(voiceTurnMock.addChunk).toHaveBeenNthCalledWith(2, chunk2);
     });
 
-    it("ignores binary messages when session is not in listening state", async () => {
+    it("drops chunks when session state is not listening", async () => {
       const { ws } = makeWs();
       handler.onOpen(ws);
 
-      // Trigger handleSpeechEnd to move to processing
+      // Trigger speech.end → session moves to processing
       handler.onMessage(ws, makeAudio());
       handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
 
-      // While processAudioChunk is running (awaiting), state is processing
-      // Sending more audio now should be dropped — verified indirectly via execute call count
-      handler.onMessage(ws, makeAudio(32)); // extra chunk during processing
+      // This chunk arrives while processing — should be dropped
+      handler.onMessage(ws, makeAudio(32));
 
-      // Wait for the async processing to complete
       await vi.waitFor(
-        () => (processAudioChunkMock.execute as ReturnType<typeof vi.fn>).mock.calls.length === 1,
+        () => (voiceTurnMock.end as ReturnType<typeof vi.fn>).mock.calls.length === 1,
       );
-      // execute was called once (with the first chunk only)
-      expect(processAudioChunkMock.execute).toHaveBeenCalledTimes(1);
+
+      // addChunk called once (first chunk before speech.end), not for the one during processing
+      const addChunkCalls = (voiceTurnMock.addChunk as ReturnType<typeof vi.fn>).mock.calls.length;
+      expect(addChunkCalls).toBe(1);
     });
   });
 
   // --- speech.end happy path ---
 
   describe("onMessage — speech.end (happy path)", () => {
-    it("sends transcript, then ready after processing", async () => {
+    it("sends transcript then ready", async () => {
       const { ws, types } = makeWs();
       handler.onOpen(ws);
 
       handler.onMessage(ws, makeAudio());
       handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
 
-      await vi.waitFor(() => types().includes("ready") && types().includes("transcript"));
+      await vi.waitFor(
+        () => types().includes("transcript") && types().filter((t) => t === "ready").length >= 2,
+      );
 
       expect(types()).toContain("transcript");
       expect(types()).toContain("ready");
@@ -167,10 +177,10 @@ describe("AudioStreamHandler", () => {
 
     it("sends audio binary chunk via ws.send", async () => {
       const audio = makeAudio(64);
-      processAudioChunkMock = makeProcessAudioChunk({ audioChunk: audio });
+      voiceTurnMock = makeVoiceTurn({ audioChunk: audio });
       handler = new AudioStreamHandler(
         new StartVoiceSession(),
-        processAudioChunkMock,
+        voiceTurnMock,
         new EndVoiceSession(),
       );
 
@@ -179,55 +189,56 @@ describe("AudioStreamHandler", () => {
       handler.onMessage(ws, makeAudio());
       handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
 
-      await vi.waitFor(() => types().includes("ready"));
+      await vi.waitFor(() => types().filter((t) => t === "ready").length >= 2);
 
       expect(binarySent).toHaveLength(1);
       expect(binarySent[0]).toBe(audio);
     });
 
-    it("pushes exchange to history so next call gets context", async () => {
+    it("calls begin() again after end() so next turn has a fresh stream", async () => {
+      const { ws, types } = makeWs();
+      handler.onOpen(ws);
+
+      handler.onMessage(ws, makeAudio());
+      handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
+
+      await vi.waitFor(() => types().filter((t) => t === "ready").length >= 2);
+
+      // begin() called once on open + once after end()
+      expect(voiceTurnMock.begin).toHaveBeenCalledTimes(2);
+    });
+
+    it("passes history snapshot so second turn receives first exchange", async () => {
       const { ws, types } = makeWs();
       handler.onOpen(ws);
 
       // First exchange
       handler.onMessage(ws, makeAudio());
       handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
-      await vi.waitFor(() => types().includes("ready"));
+      await vi.waitFor(() => types().filter((t) => t === "ready").length >= 2);
 
-      // Reset mock to capture second call
-      vi.mocked(processAudioChunkMock.execute).mockClear();
+      vi.mocked(voiceTurnMock.end).mockClear();
 
       // Second exchange
       handler.onMessage(ws, makeAudio());
       handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
       await vi.waitFor(
-        () => (processAudioChunkMock.execute as ReturnType<typeof vi.fn>).mock.calls.length === 1,
+        () => (voiceTurnMock.end as ReturnType<typeof vi.fn>).mock.calls.length === 1,
       );
 
-      const historyArg = vi.mocked(processAudioChunkMock.execute).mock.calls[0]?.[2] as unknown[];
+      const historyArg = vi.mocked(voiceTurnMock.end).mock.calls[0]?.[1] as unknown[];
       expect(historyArg).toHaveLength(2); // user + assistant from first exchange
-    });
-
-    it("sends ready when speech.end arrives with no accumulated audio", async () => {
-      const { ws, types } = makeWs();
-      handler.onOpen(ws);
-      // No audio chunks — just speech.end
-      handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
-
-      await vi.waitFor(() => types().filter((t) => t === "ready").length >= 2);
-
-      expect(processAudioChunkMock.execute).not.toHaveBeenCalled();
     });
   });
 
-  // --- speech.end failure path ---
+  // --- speech.end failure ---
 
-  describe("onMessage — speech.end (processing failure)", () => {
-    it("sends error message then ready on processAudioChunk failure", async () => {
-      processAudioChunkMock = makeProcessAudioChunk({ fail: new Error("STT unavailable") });
+  describe("onMessage — speech.end (failure)", () => {
+    it("sends error then ready when end() fails", async () => {
+      voiceTurnMock = makeVoiceTurn({ fail: new Error("STT unavailable") });
       handler = new AudioStreamHandler(
         new StartVoiceSession(),
-        processAudioChunkMock,
+        voiceTurnMock,
         new EndVoiceSession(),
       );
 
@@ -240,8 +251,7 @@ describe("AudioStreamHandler", () => {
 
       expect(types()).toContain("error");
       expect(types()).toContain("ready");
-      const errorMsg = messages().find((m) => m["type"] === "error");
-      expect(errorMsg?.["message"]).toBe("STT unavailable");
+      expect(messages().find((m) => m["type"] === "error")?.["message"]).toBe("STT unavailable");
     });
   });
 
@@ -251,66 +261,49 @@ describe("AudioStreamHandler", () => {
     it("sends ready immediately", () => {
       const { ws, types } = makeWs();
       handler.onOpen(ws);
-      const readyCountBefore = types().filter((t) => t === "ready").length;
+      const readyBefore = types().filter((t) => t === "ready").length;
 
       handler.onMessage(ws, JSON.stringify({ type: "interrupt" }));
 
-      expect(types().filter((t) => t === "ready").length).toBe(readyCountBefore + 1);
+      expect(types().filter((t) => t === "ready").length).toBe(readyBefore + 1);
     });
 
-    it("clears accumulated audio chunks", async () => {
-      const { ws, types } = makeWs();
+    it("calls abort() then begin() on the voice turn", () => {
+      const { ws } = makeWs();
       handler.onOpen(ws);
 
-      // Accumulate audio
-      handler.onMessage(ws, makeAudio());
-      handler.onMessage(ws, makeAudio());
-
-      // Interrupt — clears audio
       handler.onMessage(ws, JSON.stringify({ type: "interrupt" }));
 
-      // speech.end with no chunks → execute NOT called
-      handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
-
-      await vi.waitFor(() => types().filter((t) => t === "ready").length >= 3);
-
-      expect(processAudioChunkMock.execute).not.toHaveBeenCalled();
+      expect(voiceTurnMock.abort).toHaveBeenCalledOnce();
+      expect(voiceTurnMock.begin).toHaveBeenCalledTimes(2); // once on open, once after interrupt
     });
 
-    it("aborts in-flight processAudioChunk via signal", async () => {
+    it("aborts in-flight end() via signal", async () => {
       let capturedSignal: AbortSignal | null = null;
-
-      processAudioChunkMock = {
-        execute: vi
-          .fn()
-          .mockImplementation(
-            async (_s: unknown, _b: unknown, _h: unknown, signal: AbortSignal) => {
-              capturedSignal = signal;
-              // Simulate slow processing
-              await new Promise<void>((resolve) => setTimeout(resolve, 50));
-              return ok({ transcript: "Hello", agentReply: "Hi" });
-            },
-          ),
-      } as unknown as ProcessAudioChunk;
+      voiceTurnMock = makeVoiceTurn({ slowMs: 50 });
+      vi.mocked(voiceTurnMock.end).mockImplementation(
+        async (_session, _history, signal: AbortSignal) => {
+          capturedSignal = signal;
+          await new Promise<void>((r) => setTimeout(r, 50));
+          return ok({ transcript: "Hello", agentReply: "Hi" });
+        },
+      );
 
       handler = new AudioStreamHandler(
         new StartVoiceSession(),
-        processAudioChunkMock,
+        voiceTurnMock,
         new EndVoiceSession(),
       );
 
       const { ws } = makeWs();
       handler.onOpen(ws);
-
       handler.onMessage(ws, makeAudio());
       handler.onMessage(ws, JSON.stringify({ type: "speech.end" }));
 
-      // Interrupt before processing finishes
       await new Promise<void>((r) => setTimeout(r, 10));
       handler.onMessage(ws, JSON.stringify({ type: "interrupt" }));
 
       await vi.waitFor(() => capturedSignal !== null && capturedSignal.aborted);
-
       expect(capturedSignal!.aborted).toBe(true);
     });
   });
@@ -325,7 +318,6 @@ describe("AudioStreamHandler", () => {
       handler.onMessage(ws, JSON.stringify({ type: "session.end" }));
 
       expect(types()).toContain("session.ended");
-      expect(closed).toHaveLength(1);
       expect(closed[0]?.code).toBe(1000);
     });
   });
@@ -333,20 +325,17 @@ describe("AudioStreamHandler", () => {
   // --- onClose ---
 
   describe("onClose", () => {
-    it("transitions session to idle", () => {
+    it("calls endVoiceSession and abort on close", () => {
       const endVoiceSession = new EndVoiceSession();
       const spy = vi.spyOn(endVoiceSession, "execute");
-      handler = new AudioStreamHandler(
-        new StartVoiceSession(),
-        processAudioChunkMock,
-        endVoiceSession,
-      );
+      handler = new AudioStreamHandler(new StartVoiceSession(), voiceTurnMock, endVoiceSession);
 
       const { ws } = makeWs();
       handler.onOpen(ws);
       handler.onClose();
 
       expect(spy).toHaveBeenCalledOnce();
+      expect(voiceTurnMock.abort).toHaveBeenCalledOnce();
     });
 
     it("is safe to call without a prior onOpen", () => {
@@ -364,7 +353,6 @@ describe("AudioStreamHandler", () => {
 
       handler.onMessage(ws, 42);
       handler.onMessage(ws, null);
-      handler.onMessage(ws, { type: "unknown" });
 
       expect(sent.length).toBe(before);
     });

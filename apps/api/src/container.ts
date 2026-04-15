@@ -2,12 +2,15 @@ import { DeepgramSttAdapter } from "@/infrastructure/adapters/stt/deepgram-stt-a
 import { OpenAITtsAdapter } from "@/infrastructure/adapters/tts/openai-tts-adapter";
 import { OpenAILlmAdapter } from "@/infrastructure/adapters/llm/openai-llm-adapter";
 import { StartVoiceSession } from "@/application/use-cases/start-voice-session";
-import { ProcessAudioChunk } from "@/application/use-cases/process-audio-chunk";
+import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 
 /**
  * Dependency container — instantiates and injects adapters into use cases.
  * To swap a provider: replace the adapter here only, nothing else changes.
+ *
+ * ProcessVoiceTurn is stateful (holds an STT stream per utterance), so it must
+ * be instantiated per WebSocket connection via createProcessVoiceTurn().
  */
 const buildContainer = () => {
   // Providers — swap here to change implementation
@@ -15,14 +18,16 @@ const buildContainer = () => {
   const tts = new OpenAITtsAdapter();
   const llm = new OpenAILlmAdapter();
 
-  // Use cases
+  // Stateless use cases — shared across connections
   const startVoiceSession = new StartVoiceSession();
-  const processAudioChunk = new ProcessAudioChunk(stt, llm, tts);
   const endVoiceSession = new EndVoiceSession();
+
+  // Factory — creates a fresh ProcessVoiceTurn per WebSocket connection
+  const createProcessVoiceTurn = () => new ProcessVoiceTurn(stt, llm, tts);
 
   return {
     startVoiceSession,
-    processAudioChunk,
+    createProcessVoiceTurn,
     endVoiceSession,
   };
 };

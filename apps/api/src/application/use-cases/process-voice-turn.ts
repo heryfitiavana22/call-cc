@@ -1,22 +1,21 @@
 import type { Result } from "@call-cc/types";
 import { err, ok } from "@call-cc/types";
-import type { ISttProvider } from "@/domain/ports/i-stt-provider";
+import type { ISttProvider, ISttStream } from "@/domain/ports/i-stt-provider";
 import type { ITtsProvider } from "@/domain/ports/i-tts-provider";
 import type { ILlmProvider, LlmMessage } from "@/domain/ports/i-llm-provider";
 import type { VoiceSession } from "@/domain/entities/voice-session";
 import { logger } from "@/shared/logger";
 
-export interface ProcessAudioChunkResult {
+export interface ProcessVoiceTurnResult {
   transcript: string;
   agentReply: string;
-  // Audio is streamed via onAudioChunk callback — not returned here
 }
 
-export interface ProcessAudioChunkCallbacks {
+export interface ProcessVoiceTurnCallbacks {
+  /** Called once the transcript is known (after STT finalize). */
+  onTranscript: (text: string) => void;
   /** Called for each synthesized sentence as soon as it is ready. */
   onAudioChunk: (audio: ArrayBuffer) => void;
-  /** Called once the transcript is known (after STT). */
-  onTranscript: (text: string) => void;
 }
 
 /**
@@ -31,26 +30,54 @@ const extractSentence = (buffer: string): [string, string] | null => {
   return sentence.length > 0 ? [sentence, remainder] : null;
 };
 
-export class ProcessAudioChunk {
+/**
+ * Stateful application service — one instance per WebSocket connection.
+ *
+ * Lifecycle per user utterance:
+ *   begin()            → opens an STT stream (streaming starts immediately)
+ *   addChunk(chunk)    → forwards audio to the STT stream while user speaks
+ *   end(...)           → finalizes STT, then runs LLM → TTS pipeline
+ *   abort()            → discards current stream (barge-in / disconnection)
+ */
+export class ProcessVoiceTurn {
+  private stream: ISttStream | null = null;
+
   constructor(
     private readonly stt: ISttProvider,
     private readonly llm: ILlmProvider,
     private readonly tts: ITtsProvider,
   ) {}
 
-  async execute(
+  /** Open a new STT stream. Call once per utterance, before addChunk(). */
+  begin(): void {
+    this.stream = this.stt.createStream();
+  }
+
+  /** Forward an audio chunk to the active STT stream. */
+  addChunk(chunk: ArrayBuffer): void {
+    this.stream?.write(chunk);
+  }
+
+  /** Finalize STT then run LLM → TTS. Returns when all audio has been emitted. */
+  async end(
     session: VoiceSession,
-    audioBuffer: ArrayBuffer,
     history: LlmMessage[],
     signal: AbortSignal,
-    callbacks: ProcessAudioChunkCallbacks,
-  ): Promise<Result<ProcessAudioChunkResult>> {
+    callbacks: ProcessVoiceTurnCallbacks,
+  ): Promise<Result<ProcessVoiceTurnResult>> {
+    const stream = this.stream;
+    this.stream = null;
+
+    if (!stream) {
+      return err(new Error("No active STT stream — call begin() first"));
+    }
+
     const sessionId = session.id;
     session.transition("processing");
 
-    // STT
+    // STT finalize
     const sttStart = performance.now();
-    const transcriptResult = await this.stt.transcribe(audioBuffer, signal);
+    const transcriptResult = await stream.finalize();
     const sttMs = Math.round(performance.now() - sttStart);
 
     if (!transcriptResult.ok) {
@@ -59,10 +86,7 @@ export class ProcessAudioChunk {
     }
 
     if (transcriptResult.value.isEmpty) {
-      logger.info(
-        { sessionId, sttMs },
-        "STT returned empty transcript — no speech detected, skipping",
-      );
+      logger.info({ sessionId, sttMs }, "STT returned empty transcript — skipping");
       return ok({ transcript: "", agentReply: "" });
     }
 
@@ -84,7 +108,6 @@ export class ProcessAudioChunk {
         agentReply += token;
         buffer += token;
 
-        // Try to extract a complete sentence and synthesize it immediately
         let extracted = extractSentence(buffer);
         while (extracted !== null) {
           const [sentence, remainder] = extracted;
@@ -113,7 +136,7 @@ export class ProcessAudioChunk {
     }
 
     const llmMs = Math.round(performance.now() - llmStart);
-    logger.info({ sessionId, llmMs, sentences: agentReply.length }, "LLM stream completed");
+    logger.info({ sessionId, llmMs }, "LLM stream completed");
 
     // Synthesize any remaining text that didn't end with punctuation
     if (buffer.trim().length > 0) {
@@ -131,5 +154,11 @@ export class ProcessAudioChunk {
     }
 
     return ok({ transcript: transcriptResult.value.text, agentReply });
+  }
+
+  /** Abort the current stream (barge-in or connection close). */
+  abort(): void {
+    this.stream?.abort();
+    this.stream = null;
   }
 }
