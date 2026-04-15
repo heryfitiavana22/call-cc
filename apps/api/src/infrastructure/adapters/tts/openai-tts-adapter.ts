@@ -4,24 +4,32 @@ import { ok, err } from "@call-cc/types";
 import type { TtsProviderPort } from "@/domain/ports/tts-provider-port";
 import { env } from "@/config/env";
 
-const DEFAULT_MODEL = "tts-1";
-const DEFAULT_VOICE = "alloy";
+const MODEL = "gpt-4o-mini-tts";
+const DEFAULT_VOICE = "coral";
+
+export interface OpenAITtsAdapterOptions {
+  /** Prosody/personality instructions passed to gpt-4o-mini-tts. */
+  instructions?: string;
+}
 
 export class OpenAITtsAdapter implements TtsProviderPort {
   private readonly client: OpenAI;
+  private readonly instructions: string | undefined;
 
-  constructor() {
+  constructor({ instructions }: OpenAITtsAdapterOptions = {}) {
     this.client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+    this.instructions = instructions;
   }
 
   async synthesize(text: string, signal: AbortSignal): Promise<Result<ArrayBuffer>> {
     try {
       const response = await this.client.audio.speech.create(
         {
-          model: DEFAULT_MODEL,
+          model: MODEL,
           voice: DEFAULT_VOICE,
           input: text,
           response_format: "mp3",
+          ...(this.instructions && { instructions: this.instructions }),
         },
         { signal },
       );

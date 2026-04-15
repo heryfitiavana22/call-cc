@@ -5,7 +5,7 @@ import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 import { GroqSttAdapter } from "./infrastructure/adapters/stt/groq-stt-adapter";
 // import { DeepgramSttAdapter } from "./infrastructure/adapters/stt/deepgram-stt-adapter";
-import { buildSystemPrompt } from "./config/agent-prompt";
+import { buildSystemPrompt, AGENT_TTS_INSTRUCTIONS } from "./config/agent-prompt";
 import { buildAgentTools, type ToolAdapters } from "./infrastructure/adapters/llm/agent-tools";
 import { TavilyWebSearchAdapter } from "./infrastructure/adapters/tools/tavily-web-search-adapter";
 import { FakeCalendarAdapter } from "./infrastructure/adapters/tools/fake-calendar-adapter";
@@ -23,7 +23,7 @@ const buildContainer = () => {
   // STT — swap here to change implementation
   const stt = new GroqSttAdapter();
   // const stt = new DeepgramSttAdapter();
-  const tts = new OpenAITtsAdapter();
+  const tts = new OpenAITtsAdapter({ instructions: AGENT_TTS_INSTRUCTIONS });
 
   // Tool adapters — conditionally enabled by env vars
   const toolAdapters: ToolAdapters = {
