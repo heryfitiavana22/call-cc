@@ -143,7 +143,13 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
 
     ws.onopen = () => {
       logger.info("WebSocket connected", { url: env.VITE_API_WS_URL });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+      // Pick the best supported mimeType — audio/webm is not supported on Safari
+      const mimeType = ["audio/webm", "audio/mp4", "audio/ogg"].find((m) =>
+        MediaRecorder.isTypeSupported(m),
+      );
+      logger.debug("MediaRecorder mimeType selected", { mimeType: mimeType ?? "browser default" });
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
 
       recorder.ondataavailable = (e: BlobEvent) => {
         if (e.data.size === 0) return;
@@ -159,6 +165,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
         e.data
           .arrayBuffer()
           .then((buf) => {
+            logger.debug("Audio chunk sent", { bytes: buf.byteLength });
             ws.send(buf);
             // Reset silence timer on every audio chunk
             resetSilenceTimer(ws);
