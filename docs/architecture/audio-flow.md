@@ -49,6 +49,13 @@ When VAD fires while `isAgentSpeaking === true` → interruption.
 **Echo problem**: agent voice through speakers is picked up by mic → false positives.
 **Solution**: browser-native echo cancellation (`echoCancellation: true` on `getUserMedia`).
 
+**Race condition — `decodeAudioData`**: `playAudioChunk` is async. If `stopAllAudio` clears
+the queue while a `decodeAudioData` promise is still in flight, the decoded chunk would be
+pushed to the (now empty) queue and played anyway.
+**Solution**: `audioGenerationRef` — an integer incremented on every `stopAllAudio`. The
+generation is captured before the `await`; after it, if the generation changed the chunk is
+discarded.
+
 ### Interruption Sequence
 
 ```
@@ -87,18 +94,18 @@ processAudioChunk(chunk: AudioChunk, signal: AbortSignal): Promise<Result<...>>
 
 All control messages are JSON. Audio data is raw `ArrayBuffer`.
 
-| Message                               | Direction       | Description                     |
-| ------------------------------------- | --------------- | ------------------------------- |
-| ArrayBuffer (WAV binary)              | client → server | Speech audio (WAV, 16kHz mono)  |
-| `{ type: 'speech.end' }`              | client → server | Signals end of speech utterance |
-| `{ type: 'interrupt' }`               | client → server | User interrupted the agent      |
-| `{ type: 'session.end' }`             | client → server | End the call                    |
-| `{ type: 'audio' }` (ArrayBuffer)     | server → client | TTS audio chunk                 |
-| `{ type: 'ready' }`                   | server → client | Backend ready to listen         |
-| `{ type: 'transcript', text, final }` | server → client | STT transcript (for UI display) |
-| `{ type: 'error', message }`          | server → client | Error notification              |
-| `{ type: 'session.started' }`         | server → client | Session initialized             |
-| `{ type: 'session.ended' }`           | server → client | Session closed                  |
+| Message                               | Direction       | Description                        |
+| ------------------------------------- | --------------- | ---------------------------------- |
+| ArrayBuffer (WAV binary)              | client → server | Speech audio (WAV, 16kHz mono)     |
+| `{ type: 'speech.end' }`              | client → server | Signals end of speech utterance    |
+| `{ type: 'interrupt' }`               | client → server | User interrupted the agent         |
+| `{ type: 'session.end' }`             | client → server | End the call                       |
+| ArrayBuffer (mp3 binary)              | server → client | TTS audio chunk (one per sentence) |
+| `{ type: 'ready' }`                   | server → client | Backend ready to listen            |
+| `{ type: 'transcript', text, final }` | server → client | STT transcript (for UI display)    |
+| `{ type: 'error', message }`          | server → client | Error notification                 |
+| `{ type: 'session.started' }`         | server → client | Session initialized                |
+| `{ type: 'session.ended' }`           | server → client | Session closed                     |
 
 ## Future Phone Calls (Twilio)
 
