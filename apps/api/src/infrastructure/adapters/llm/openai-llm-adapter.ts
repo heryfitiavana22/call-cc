@@ -8,7 +8,7 @@ export class OpenAILlmAdapter implements ILlmProvider {
     tools: LlmTool[],
     signal: AbortSignal,
   ): Promise<Result<string>> {
-    // TODO: implement OpenAI chat via Vercel AI SDK v6
+    // TODO: implement OpenAI chat completion via Vercel AI SDK v6
     void messages;
     void tools;
     void signal;

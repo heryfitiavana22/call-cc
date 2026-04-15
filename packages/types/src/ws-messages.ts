@@ -1,21 +1,30 @@
+import { z } from "zod";
+
 /**
- * Protocol WebSocket entre le frontend et le backend.
- * Tous les messages transitent en JSON sauf les chunks audio (ArrayBuffer).
+ * WebSocket protocol between frontend and backend.
+ * All messages are JSON except audio chunks (ArrayBuffer).
  */
 
-// Client → Server
-export type ClientMessage =
-  | { type: "interrupt" }
-  | { type: "session.start" }
-  | { type: "session.end" };
+// — Zod schemas (used for runtime validation) —
 
-// Server → Client
-export type ServerMessage =
-  | { type: "ready" }
-  | { type: "transcript"; text: string; final: boolean }
-  | { type: "error"; message: string }
-  | { type: "session.started" }
-  | { type: "session.ended" };
+export const clientMessageSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("interrupt") }),
+  z.object({ type: z.literal("session.start") }),
+  z.object({ type: z.literal("session.end") }),
+]);
 
-// État de la session vocale côté frontend
+export const serverMessageSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("ready") }),
+  z.object({ type: z.literal("transcript"), text: z.string(), final: z.boolean() }),
+  z.object({ type: z.literal("error"), message: z.string() }),
+  z.object({ type: z.literal("session.started") }),
+  z.object({ type: z.literal("session.ended") }),
+]);
+
+// — Inferred TypeScript types —
+
+export type ClientMessage = z.infer<typeof clientMessageSchema>;
+export type ServerMessage = z.infer<typeof serverMessageSchema>;
+
+// Voice session state on the frontend
 export type CallState = "idle" | "listening" | "processing" | "speaking";

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CallState, ClientMessage, ServerMessage } from "@call-cc/types";
-
-const WS_URL = import.meta.env["VITE_API_WS_URL"] ?? "ws://localhost:3001/voice/ws";
+import { serverMessageSchema } from "@call-cc/types";
+import { env } from "../config/env.js";
 
 export interface UseVoiceCallReturn {
   state: CallState;
@@ -82,27 +82,21 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       },
     });
 
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(env.VITE_API_WS_URL);
     wsRef.current = ws;
     ws.binaryType = "arraybuffer";
 
     ws.onmessage = (event: MessageEvent) => {
       if (event.data instanceof ArrayBuffer) {
-        if (isAgentSpeakingRef.current) {
-          audioQueueRef.current.push(event.data);
-          isAgentSpeakingRef.current = true;
-          setState("speaking");
-          void playAudioChunk(event.data);
-        }
+        isAgentSpeakingRef.current = true;
+        setState("speaking");
+        audioQueueRef.current.push(event.data);
+        void playAudioChunk(event.data);
         return;
       }
 
-      try {
-        const message = JSON.parse(event.data as string) as ServerMessage;
-        handleServerMessage(message);
-      } catch {
-        // message non-JSON ignoré
-      }
+      const parsed = serverMessageSchema.safeParse(JSON.parse(event.data as string));
+      if (parsed.success) handleServerMessage(parsed.data);
     };
 
     ws.onclose = () => {
@@ -111,13 +105,11 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     };
 
     ws.onopen = () => {
-      // Le backend envoie session.started + ready automatiquement à l'ouverture
-      // Ici on configure l'envoi des chunks audio via MediaRecorder
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
 
       recorder.ondataavailable = (e: BlobEvent) => {
         if (e.data.size === 0) return;
-        if (state === "listening") {
+        if (ws.readyState === WebSocket.OPEN) {
           e.data
             .arrayBuffer()
             .then((buf) => ws.send(buf))
@@ -125,19 +117,20 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
         }
       };
 
-      recorder.start(100); // chunk toutes les 100ms
+      recorder.start(100); // chunk every 100ms
 
-      // VAD — à intégrer avec @ricky0123/vad-web (lazy import pour éviter le chargement WASM au démarrage)
-      // Lorsque le VAD détecte de la voix pendant que l'agent parle → interrupt()
-      // TODO: intégrer VAD ici dans la prochaine étape
-      void interrupt; // référence pour éviter l'avertissement lint
+      // VAD integration point: @ricky0123/vad-web (Silero VAD)
+      // When VAD detects speech while isAgentSpeakingRef.current is true → call interrupt()
+      // Loaded lazily to avoid blocking WASM initialization at startup
+      // TODO: integrate VAD in next step
+      void interrupt;
     };
 
     ws.onerror = () => {
       setError("WebSocket connection failed");
       setState("idle");
     };
-  }, [handleServerMessage, interrupt, playAudioChunk, state]);
+  }, [handleServerMessage, interrupt, playAudioChunk]);
 
   const endCall = useCallback(() => {
     send({ type: "session.end" });

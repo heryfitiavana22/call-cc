@@ -15,7 +15,8 @@
     "@call-cc/types": "workspace:*",
     "@ricky0123/vad-web": "^0.0.22",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@call-cc/eslint-config": "workspace:*",

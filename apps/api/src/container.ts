@@ -6,11 +6,11 @@ import { ProcessAudioChunk } from "./application/use-cases/process-audio-chunk.j
 import { EndVoiceSession } from "./application/use-cases/end-voice-session.js";
 
 /**
- * Container de dépendances — instancie et injecte les adapters dans les use cases.
- * Pour changer de provider : remplacer l'adapter ici uniquement.
+ * Dependency container — instantiates and injects adapters into use cases.
+ * To swap a provider: replace the adapter here only, nothing else changes.
  */
 const buildContainer = () => {
-  // Providers — swap ici pour changer d'implémentation
+  // Providers — swap here to change implementation
   const stt = new DeepgramSttAdapter();
   const tts = new OpenAITtsAdapter();
   const llm = new OpenAILlmAdapter();

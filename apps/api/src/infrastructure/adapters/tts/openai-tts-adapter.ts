@@ -4,7 +4,7 @@ import type { ITtsProvider } from "../../../domain/ports/i-tts-provider.js";
 
 export class OpenAITtsAdapter implements ITtsProvider {
   async synthesize(text: string, signal: AbortSignal): Promise<Result<ArrayBuffer>> {
-    // TODO: implement OpenAI TTS synthesis
+    // TODO: implement OpenAI TTS speech synthesis
     void text;
     void signal;
     return err(new Error("OpenAITtsAdapter not yet implemented"));

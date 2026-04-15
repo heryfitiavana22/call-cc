@@ -5,7 +5,7 @@ import { Transcript } from "../../../domain/value-objects/transcript.js";
 
 export class DeepgramSttAdapter implements ISttProvider {
   async transcribe(audioChunk: ArrayBuffer, signal: AbortSignal): Promise<Result<Transcript>> {
-    // TODO: implement Deepgram streaming transcription
+    // TODO: implement Deepgram real-time streaming transcription
     void audioChunk;
     void signal;
     return err(new Error("DeepgramSttAdapter not yet implemented"));

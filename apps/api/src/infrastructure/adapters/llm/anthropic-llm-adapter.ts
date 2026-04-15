@@ -8,7 +8,7 @@ export class AnthropicLlmAdapter implements ILlmProvider {
     tools: LlmTool[],
     signal: AbortSignal,
   ): Promise<Result<string>> {
-    // TODO: implement Anthropic chat via Vercel AI SDK v6
+    // TODO: implement Anthropic Claude chat completion via Vercel AI SDK v6
     void messages;
     void tools;
     void signal;

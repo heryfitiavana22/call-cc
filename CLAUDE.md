@@ -1,18 +1,25 @@
-# Instructions pour Claude — call-cc
+# Claude Instructions — call-cc
 
-## Rester à jour
+## Stay up to date
 
-- Nous sommes en **2026**. Toujours utiliser les versions et pratiques actuelles.
-- En cas de doute sur une version, une API, ou une best practice, **faire une recherche web avant de répondre ou d'implémenter**. Ne pas se fier uniquement aux connaissances internes qui peuvent être outdatées.
-- Si une information n'est pas certaine, **demander plutôt qu'assumer**.
+- We are in **2026**. Always use current versions and practices.
+- When in doubt about a version, API, or best practice, **search the web before answering or implementing**. Do not rely solely on internal knowledge that may be outdated.
+- If information is uncertain, **ask rather than assume**.
 
-## Contexte du projet
+## Project context
 
-Voir `docs/ARCHITECTURE.md` pour toutes les décisions d'architecture.
+See `docs/ARCHITECTURE.md` for the architecture index and all decision files.
 
-## Règles générales
+## General rules
 
-- Langue de communication : **français**
-- Ne pas modifier l'architecture sans en discuter d'abord
-- Toujours respecter l'architecture hexagonale (ports & adapters)
-- Les providers (STT, TTS, LLM) doivent rester swappables — ne jamais coupler le domaine à un provider
+- **Communication language: French** (code and comments: English)
+- Do not modify the architecture without discussing it first
+- Always follow hexagonal architecture (ports & adapters)
+- Providers (STT, TTS, LLM) must remain swappable — never couple the domain to a provider
+- All code and comments must be in **English**
+- File names: **kebab-case**
+
+## Documentation
+
+- Always update `docs/` when architecture decisions change
+- Do not rely only on memory — always document decisions in project files (they follow the repo across machines)

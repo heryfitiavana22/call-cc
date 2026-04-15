@@ -1,5 +1,6 @@
 import type { WSContext } from "hono/ws";
 import type { ClientMessage, ServerMessage } from "@call-cc/types";
+import { clientMessageSchema } from "@call-cc/types";
 import type { ProcessAudioChunk } from "../../application/use-cases/process-audio-chunk.js";
 import type { StartVoiceSession } from "../../application/use-cases/start-voice-session.js";
 import type { EndVoiceSession } from "../../application/use-cases/end-voice-session.js";
@@ -103,9 +104,10 @@ export class AudioStreamHandler {
     ws.send(JSON.stringify(message));
   }
 
-  private parseMessage(raw: string): ClientMessage | null {
+  private parseMessage(raw: string) {
     try {
-      return JSON.parse(raw) as ClientMessage;
+      const parsed = clientMessageSchema.safeParse(JSON.parse(raw));
+      return parsed.success ? parsed.data : null;
     } catch {
       return null;
     }
