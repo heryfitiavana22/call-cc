@@ -1,0 +1,17 @@
+{
+  "name": "@call-cc/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./src/base.js",
+    "./node": "./src/node.js",
+    "./react": "./src/react.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.26.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript-eslint": "^8.32.1"
+  }
+}
