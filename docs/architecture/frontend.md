@@ -58,6 +58,21 @@ See [audio-flow.md](./audio-flow.md) for the full message protocol.
 
 Validated at startup via Zod in `src/config/env.ts`:
 
-| Variable          | Default                        | Description           |
-| ----------------- | ------------------------------ | --------------------- |
-| `VITE_API_WS_URL` | `ws://localhost:3001/voice/ws` | Backend WebSocket URL |
+| Variable          | Default                        | Description                          |
+| ----------------- | ------------------------------ | ------------------------------------ |
+| `VITE_API_WS_URL` | `ws://localhost:3001/voice/ws` | Backend WebSocket URL                |
+| `VITE_LOG_LEVEL`  | `info`                         | Logger level (error/warn/info/debug) |
+
+## VAD Setup (Vite)
+
+`@ricky0123/vad-web` requires WASM and ONNX model files to be served at the root URL.
+Handled by `vite-plugin-static-copy` in `vite.config.ts` — no manual configuration needed.
+
+The dev server also needs COOP/COEP headers for `SharedArrayBuffer` (used by onnxruntime-web):
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+These are set automatically in `vite.config.ts`.

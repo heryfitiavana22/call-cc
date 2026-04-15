@@ -3,19 +3,24 @@
 ## Normal Flow
 
 ```
-Browser mic → MediaRecorder (100ms chunks)
-  │  WebSocket (ArrayBuffer)
+Browser mic → VAD (@ricky0123/vad-web, Silero model)
+  │  onSpeechEnd(Float32Array) → converted to WAV (float32ToWav)
+  │  WebSocket (ArrayBuffer binary = WAV file)
+  │  WebSocket (JSON: { type: 'speech.end' })
   ▼
 Backend AudioStreamHandler
+  │  accumulates binary chunks until speech.end
   │
-  ├── STT: ISttProvider.transcribe(chunk, signal)
+  ├── STT: ISttProvider.transcribe(wavBuffer, signal)
   ├── LLM: ILlmProvider.chat(messages, tools, signal)
   └── TTS: ITtsProvider.synthesize(text, signal)
           │
-          │  WebSocket (ArrayBuffer)
+          │  WebSocket (ArrayBuffer = mp3 audio)
           ▼
       Browser AudioContext.decodeAudioData → play
 ```
+
+Audio format: VAD provides Float32Array at 16kHz mono → frontend encodes as WAV (44-byte header + Int16 PCM) before sending.
 
 ## Barge-in (User Interrupts Agent)
 
@@ -69,7 +74,8 @@ All control messages are JSON. Audio data is raw `ArrayBuffer`.
 
 | Message                               | Direction       | Description                     |
 | ------------------------------------- | --------------- | ------------------------------- |
-| `{ type: 'audio' }` (ArrayBuffer)     | client → server | Mic audio chunk                 |
+| ArrayBuffer (WAV binary)              | client → server | Speech audio (WAV, 16kHz mono)  |
+| `{ type: 'speech.end' }`              | client → server | Signals end of speech utterance |
 | `{ type: 'interrupt' }`               | client → server | User interrupted the agent      |
 | `{ type: 'session.end' }`             | client → server | End the call                    |
 | `{ type: 'audio' }` (ArrayBuffer)     | server → client | TTS audio chunk                 |

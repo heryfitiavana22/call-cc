@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MicVAD } from "@ricky0123/vad-web";
 import type { CallState, ClientMessage, ServerMessage } from "@call-cc/types";
 import { serverMessageSchema } from "@call-cc/types";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
-
-// RMS amplitude threshold (0–128 scale) above which we consider the user is speaking.
-// Tune this down if speech is not detected, up if background noise triggers it.
-const SPEECH_RMS_THRESHOLD = 8;
-
-// How long the RMS must stay below threshold before signalling speech end.
-// Will be replaced by VAD (Silero via @ricky0123/vad-web) in the next step.
-const SILENCE_TIMEOUT_MS = 1500;
 
 export interface UseVoiceCallReturn {
   state: CallState;
@@ -20,18 +13,56 @@ export interface UseVoiceCallReturn {
   endCall: () => void;
 }
 
+/**
+ * Encodes a Float32Array (VAD output, 16kHz mono) into a WAV ArrayBuffer.
+ * WAV is self-describing — no need to pass encoding/sample_rate params to Deepgram.
+ */
+const float32ToWav = (float32: Float32Array, sampleRate = 16000): ArrayBuffer => {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const dataSize = float32.length * 2; // Int16 = 2 bytes per sample
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeStr = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true); // PCM chunk size
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeStr(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < float32.length; i++) {
+    const sample = float32[i] ?? 0;
+    view.setInt16(offset, Math.max(-32768, Math.min(32767, Math.round(sample * 32768))), true);
+    offset += 2;
+  }
+
+  return buffer;
+};
+
 export const useVoiceCall = (): UseVoiceCallReturn => {
   const [state, setState] = useState<CallState>("idle");
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const vadRef = useRef<MicVAD | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const isAgentSpeakingRef = useRef(false);
-  const audioQueueRef = useRef<ArrayBuffer[]>([]);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const speechCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const send = useCallback((message: ClientMessage) => {
     wsRef.current?.send(JSON.stringify(message));
@@ -79,35 +110,11 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     source.start();
   }, []);
 
-  const interrupt = useCallback(() => {
-    logger.info("Barge-in: interrupting agent");
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    audioQueueRef.current = [];
-    isAgentSpeakingRef.current = false;
-    send({ type: "interrupt" });
-    setState("listening");
-  }, [send]);
-
-  const stopSpeechCheck = useCallback(() => {
-    if (speechCheckIntervalRef.current) {
-      clearInterval(speechCheckIntervalRef.current);
-      speechCheckIntervalRef.current = null;
-    }
-  }, []);
-
   const startCall = useCallback(async () => {
     setError(null);
     setTranscript("");
 
     audioContextRef.current = new AudioContext();
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
 
     const ws = new WebSocket(env.VITE_API_WS_URL);
     wsRef.current = ws;
@@ -118,7 +125,6 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
         logger.debug("Audio chunk received from agent", { bytes: event.data.byteLength });
         isAgentSpeakingRef.current = true;
         setState("speaking");
-        audioQueueRef.current.push(event.data);
         void playAudioChunk(event.data);
         return;
       }
@@ -133,85 +139,8 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
 
     ws.onclose = () => {
       logger.info("WebSocket closed");
-      stopSpeechCheck();
+      vadRef.current?.pause();
       setState("idle");
-      stream.getTracks().forEach((t) => t.stop());
-      if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
-      recorderRef.current = null;
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    };
-
-    ws.onopen = () => {
-      logger.info("WebSocket connected", { url: env.VITE_API_WS_URL });
-
-      // Pick the best supported mimeType — audio/webm is not supported on Safari
-      const mimeType = ["audio/webm", "audio/mp4", "audio/ogg"].find((m) =>
-        MediaRecorder.isTypeSupported(m),
-      );
-      logger.debug("MediaRecorder mimeType selected", { mimeType: mimeType ?? "browser default" });
-
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-      recorderRef.current = recorder;
-
-      recorder.onerror = (e) => {
-        logger.error("MediaRecorder error", { error: String(e) });
-      };
-
-      // Send audio chunks to the backend for accumulation.
-      // Barge-in check: if the agent is speaking, interrupt it.
-      recorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data.size === 0) return;
-        if (ws.readyState !== WebSocket.OPEN) return;
-
-        if (isAgentSpeakingRef.current) {
-          interrupt();
-          return;
-        }
-
-        e.data
-          .arrayBuffer()
-          .then((buf) => {
-            logger.debug("Audio chunk sent", { bytes: buf.byteLength });
-            ws.send(buf);
-          })
-          .catch(() => null);
-      };
-
-      recorder.start(100);
-      logger.info("MediaRecorder started", { mimeType: recorder.mimeType, state: recorder.state });
-
-      // Speech detection via AnalyserNode RMS energy.
-      // The silence timer only resets when the user's voice is above the threshold.
-      // This replaces the naive "reset on every chunk" approach which never detected silence.
-      // TODO: replace with VAD (@ricky0123/vad-web) in next step.
-      const analyser = audioContextRef.current!.createAnalyser();
-      analyser.fftSize = 256;
-      const source = audioContextRef.current!.createMediaStreamSource(stream);
-      source.connect(analyser);
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      speechCheckIntervalRef.current = setInterval(() => {
-        if (ws.readyState !== WebSocket.OPEN || isAgentSpeakingRef.current) return;
-
-        analyser.getByteTimeDomainData(dataArray);
-        // RMS on a 0–128 centered scale (128 = silence in Web Audio API)
-        const rms = Math.sqrt(
-          dataArray.reduce((sum, v) => sum + (v - 128) ** 2, 0) / dataArray.length,
-        );
-        logger.debug("Audio RMS", { rms: Math.round(rms) });
-
-        if (rms > SPEECH_RMS_THRESHOLD) {
-          // User is speaking — reset the silence countdown
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = setTimeout(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              logger.info("Silence detected — sending speech.end");
-              setState("processing");
-              ws.send(JSON.stringify({ type: "speech.end" } satisfies ClientMessage));
-            }
-          }, SILENCE_TIMEOUT_MS);
-        }
-      }, 100);
     };
 
     ws.onerror = () => {
@@ -219,25 +148,66 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       setError("WebSocket connection failed");
       setState("idle");
     };
-  }, [handleServerMessage, interrupt, playAudioChunk, stopSpeechCheck]);
+
+    ws.onopen = async () => {
+      logger.info("WebSocket connected", { url: env.VITE_API_WS_URL });
+
+      try {
+        const vad = await MicVAD.new({
+          onSpeechStart: () => {
+            logger.info("VAD: speech start detected");
+            // Barge-in: user speaks while agent is speaking
+            if (isAgentSpeakingRef.current) {
+              logger.info("Barge-in: interrupting agent");
+              isAgentSpeakingRef.current = false;
+              send({ type: "interrupt" });
+              setState("listening");
+            }
+          },
+          onSpeechEnd: (audio: Float32Array) => {
+            logger.info("VAD: speech end detected", { samples: audio.length });
+
+            if (ws.readyState !== WebSocket.OPEN) return;
+
+            // Convert Float32 PCM (VAD output, 16kHz) → WAV (self-describing, Deepgram reads the header)
+            const wavBuffer = float32ToWav(audio);
+            ws.send(wavBuffer);
+            logger.debug("Audio sent as WAV", { bytes: wavBuffer.byteLength });
+
+            setState("processing");
+            ws.send(JSON.stringify({ type: "speech.end" } satisfies ClientMessage));
+          },
+          onVADMisfire: () => {
+            logger.debug("VAD: misfire (speech too short, ignored)");
+          },
+        });
+
+        vadRef.current = vad;
+        vad.start();
+        logger.info("VAD started");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.error("VAD initialization failed", { error: msg });
+        setError(`VAD initialization failed: ${msg}`);
+        ws.close();
+      }
+    };
+  }, [handleServerMessage, playAudioChunk, send]);
 
   const endCall = useCallback(() => {
-    stopSpeechCheck();
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    vadRef.current?.pause();
     send({ type: "session.end" });
     wsRef.current?.close();
     audioContextRef.current?.close().catch(() => null);
-  }, [send, stopSpeechCheck]);
+  }, [send]);
 
   useEffect(() => {
     return () => {
-      stopSpeechCheck();
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
+      vadRef.current?.pause();
       wsRef.current?.close();
       audioContextRef.current?.close().catch(() => null);
     };
-  }, [stopSpeechCheck]);
+  }, []);
 
   return { state, transcript, error, startCall, endCall };
 };
