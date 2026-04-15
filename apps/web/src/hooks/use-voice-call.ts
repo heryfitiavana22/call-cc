@@ -3,6 +3,10 @@ import type { CallState, ClientMessage, ServerMessage } from "@call-cc/types";
 import { serverMessageSchema } from "@call-cc/types";
 import { env } from "@/config/env";
 
+// How long to wait after the last audio chunk before signalling speech end.
+// Will be replaced by VAD (Silero via @ricky0123/vad-web) in the next step.
+const SILENCE_TIMEOUT_MS = 1500;
+
 export interface UseVoiceCallReturn {
   state: CallState;
   transcript: string;
@@ -20,6 +24,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const isAgentSpeakingRef = useRef(false);
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const send = useCallback((message: ClientMessage) => {
     wsRef.current?.send(JSON.stringify(message));
@@ -62,11 +67,27 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   }, []);
 
   const interrupt = useCallback(() => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     audioQueueRef.current = [];
     isAgentSpeakingRef.current = false;
     send({ type: "interrupt" });
     setState("listening");
   }, [send]);
+
+  /**
+   * Resets the silence timer.
+   * When the timer fires, it signals the backend that speech has ended.
+   * This is a fallback until VAD (@ricky0123/vad-web) is integrated.
+   */
+  const resetSilenceTimer = useCallback((ws: WebSocket) => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        setState("processing");
+        ws.send(JSON.stringify({ type: "speech.end" } satisfies ClientMessage));
+      }
+    }, SILENCE_TIMEOUT_MS);
+  }, []);
 
   const startCall = useCallback(async () => {
     setError(null);
@@ -102,6 +123,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     ws.onclose = () => {
       setState("idle");
       stream.getTracks().forEach((t) => t.stop());
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
 
     ws.onopen = () => {
@@ -109,30 +131,40 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
 
       recorder.ondataavailable = (e: BlobEvent) => {
         if (e.data.size === 0) return;
-        if (ws.readyState === WebSocket.OPEN) {
-          e.data
-            .arrayBuffer()
-            .then((buf) => ws.send(buf))
-            .catch(() => null);
+        if (ws.readyState !== WebSocket.OPEN) return;
+
+        // Only send audio when the user is speaking (not when agent is speaking)
+        if (isAgentSpeakingRef.current) {
+          // Barge-in: user speaks while agent is speaking → interrupt
+          interrupt();
+          return;
         }
+
+        e.data
+          .arrayBuffer()
+          .then((buf) => {
+            ws.send(buf);
+            // Reset silence timer on every audio chunk
+            resetSilenceTimer(ws);
+          })
+          .catch(() => null);
       };
 
       recorder.start(100); // chunk every 100ms
 
       // VAD integration point: @ricky0123/vad-web (Silero VAD)
-      // When VAD detects speech while isAgentSpeakingRef.current is true → call interrupt()
-      // Loaded lazily to avoid blocking WASM initialization at startup
+      // Replace resetSilenceTimer with VAD speech-end events for accurate detection
       // TODO: integrate VAD in next step
-      void interrupt;
     };
 
     ws.onerror = () => {
       setError("WebSocket connection failed");
       setState("idle");
     };
-  }, [handleServerMessage, interrupt, playAudioChunk]);
+  }, [handleServerMessage, interrupt, playAudioChunk, resetSilenceTimer]);
 
   const endCall = useCallback(() => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     send({ type: "session.end" });
     wsRef.current?.close();
     audioContextRef.current?.close().catch(() => null);
@@ -140,6 +172,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
 
   useEffect(() => {
     return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       wsRef.current?.close();
       audioContextRef.current?.close().catch(() => null);
     };

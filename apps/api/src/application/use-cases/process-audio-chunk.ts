@@ -7,6 +7,7 @@ import type { VoiceSession } from "@/domain/entities/voice-session";
 
 export interface ProcessAudioChunkResult {
   transcript: string;
+  agentReply: string;
   audioResponse: ArrayBuffer;
 }
 
@@ -45,6 +46,7 @@ export class ProcessAudioChunk {
       ok: true,
       value: {
         transcript: transcriptResult.value.text,
+        agentReply: llmResult.value,
         audioResponse: ttsResult.value,
       },
     };

@@ -14,10 +14,26 @@ const generateSessionId = (): string =>
     .toString(36)
     .slice(2, 2 + SESSION_ID_LENGTH);
 
+/**
+ * Concatenates an array of ArrayBuffers into a single ArrayBuffer.
+ */
+const mergeBuffers = (chunks: ArrayBuffer[]): ArrayBuffer => {
+  const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+  const merged = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(new Uint8Array(chunk), offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
+};
+
 export class AudioStreamHandler {
   private session: VoiceSession | null = null;
   private abortController: AbortController = new AbortController();
   private history: LlmMessage[] = [];
+  // Audio chunks accumulated between speech.start and speech.end
+  private audioChunks: ArrayBuffer[] = [];
 
   constructor(
     private readonly startVoiceSession: StartVoiceSession,
@@ -38,7 +54,7 @@ export class AudioStreamHandler {
 
   onMessage(ws: WSContext, data: unknown): void {
     if (data instanceof ArrayBuffer) {
-      void this.handleAudioChunk(ws, data);
+      this.handleAudioChunk(data);
       return;
     }
 
@@ -56,14 +72,33 @@ export class AudioStreamHandler {
       this.session = null;
     }
     this.abortController.abort();
+    this.audioChunks = [];
   }
 
-  private async handleAudioChunk(ws: WSContext, chunk: ArrayBuffer): Promise<void> {
+  /**
+   * Accumulates raw audio chunks into a buffer.
+   * The buffer is flushed when speech.end is received.
+   */
+  private handleAudioChunk(chunk: ArrayBuffer): void {
     if (!this.session || this.session.state !== "listening") return;
+    this.audioChunks.push(chunk);
+  }
+
+  /**
+   * Merges the accumulated audio buffer and triggers STT → LLM → TTS pipeline.
+   */
+  private async handleSpeechEnd(ws: WSContext): Promise<void> {
+    if (!this.session || this.audioChunks.length === 0) {
+      this.send(ws, { type: "ready" });
+      return;
+    }
+
+    const audioBuffer = mergeBuffers(this.audioChunks);
+    this.audioChunks = [];
 
     const result = await this.processAudioChunk.execute(
       this.session,
-      chunk,
+      audioBuffer,
       this.history,
       this.abortController.signal,
     );
@@ -76,6 +111,7 @@ export class AudioStreamHandler {
     }
 
     this.history.push({ role: "user", content: result.value.transcript });
+    this.history.push({ role: "assistant", content: result.value.agentReply });
     this.send(ws, { type: "transcript", text: result.value.transcript, final: true });
 
     ws.send(result.value.audioResponse);
@@ -85,9 +121,15 @@ export class AudioStreamHandler {
   }
 
   private handleControlMessage(ws: WSContext, message: ClientMessage): void {
+    if (message.type === "speech.end") {
+      void this.handleSpeechEnd(ws);
+      return;
+    }
+
     if (message.type === "interrupt") {
       this.abortController.abort();
       this.abortController = new AbortController();
+      this.audioChunks = [];
       if (this.session) this.session.transition("listening");
       this.send(ws, { type: "ready" });
       return;

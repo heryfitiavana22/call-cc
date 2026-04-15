@@ -11,6 +11,8 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("interrupt") }),
   z.object({ type: z.literal("session.start") }),
   z.object({ type: z.literal("session.end") }),
+  // Sent by the frontend when speech ends (VAD or silence detection)
+  z.object({ type: z.literal("speech.end") }),
 ]);
 
 export const serverMessageSchema = z.discriminatedUnion("type", [
