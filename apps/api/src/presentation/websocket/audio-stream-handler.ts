@@ -106,7 +106,7 @@ export class AudioStreamHandler {
     const result = await this.processAudioChunk.execute(
       this.session,
       audioBuffer,
-      this.history,
+      [...this.history], // snapshot — prevents callee from observing future mutations
       signal,
       {
         onTranscript: (text) => this.send(ws, { type: "transcript", text, final: true }),
