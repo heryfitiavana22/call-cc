@@ -16,6 +16,9 @@ const envSchema = z.object({
   DEEPGRAM_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
 
+  // Tools (each key enables the corresponding tool at runtime)
+  TAVILY_API_KEY: z.string().optional(),
+
   // TTS (optional — falls back to OpenAI TTS)
   ELEVENLABS_API_KEY: z.string().optional(),
 });
