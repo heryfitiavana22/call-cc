@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CallState, ClientMessage, ServerMessage } from "@call-cc/types";
 import { serverMessageSchema } from "@call-cc/types";
 import { env } from "@/config/env";
+import { logger } from "@/shared/logger";
 
 // How long to wait after the last audio chunk before signalling speech end.
 // Will be replaced by VAD (Silero via @ricky0123/vad-web) in the next step.
@@ -31,6 +32,8 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   }, []);
 
   const handleServerMessage = useCallback((message: ServerMessage) => {
+    logger.debug("Server message received", { type: message.type });
+
     if (message.type === "ready") {
       isAgentSpeakingRef.current = false;
       setState("listening");
@@ -38,21 +41,25 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     }
 
     if (message.type === "transcript") {
+      logger.info("Transcript received", { text: message.text });
       setTranscript(message.text);
       return;
     }
 
     if (message.type === "session.started") {
+      logger.info("Session started");
       setState("listening");
       return;
     }
 
     if (message.type === "session.ended") {
+      logger.info("Session ended");
       setState("idle");
       return;
     }
 
     if (message.type === "error") {
+      logger.error("Server error", { message: message.message });
       setError(message.message);
     }
   }, []);
@@ -67,6 +74,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   }, []);
 
   const interrupt = useCallback(() => {
+    logger.info("Barge-in: interrupting agent");
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     audioQueueRef.current = [];
     isAgentSpeakingRef.current = false;
@@ -83,6 +91,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = setTimeout(() => {
       if (ws.readyState === WebSocket.OPEN) {
+        logger.info("Silence detected — sending speech.end");
         setState("processing");
         ws.send(JSON.stringify({ type: "speech.end" } satisfies ClientMessage));
       }
@@ -109,6 +118,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
 
     ws.onmessage = (event: MessageEvent) => {
       if (event.data instanceof ArrayBuffer) {
+        logger.debug("Audio chunk received from agent", { bytes: event.data.byteLength });
         isAgentSpeakingRef.current = true;
         setState("speaking");
         audioQueueRef.current.push(event.data);
@@ -117,16 +127,22 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       }
 
       const parsed = serverMessageSchema.safeParse(JSON.parse(event.data as string));
-      if (parsed.success) handleServerMessage(parsed.data);
+      if (parsed.success) {
+        handleServerMessage(parsed.data);
+      } else {
+        logger.warn("Unknown message from server", { raw: event.data as string });
+      }
     };
 
     ws.onclose = () => {
+      logger.info("WebSocket closed");
       setState("idle");
       stream.getTracks().forEach((t) => t.stop());
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
 
     ws.onopen = () => {
+      logger.info("WebSocket connected", { url: env.VITE_API_WS_URL });
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
 
       recorder.ondataavailable = (e: BlobEvent) => {
@@ -158,6 +174,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     };
 
     ws.onerror = () => {
+      logger.error("WebSocket connection failed");
       setError("WebSocket connection failed");
       setState("idle");
     };

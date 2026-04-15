@@ -7,6 +7,8 @@ See root `CLAUDE.md` and `docs/ARCHITECTURE.md` for project-wide rules.
 - Framework: **React 19 + Vite**
 - All environment variables must be validated via Zod in `src/config/env.ts`
 - Env vars must be prefixed with `VITE_` to be exposed to the browser
+- Logger: lightweight console wrapper at `src/shared/logger.ts` — always use this, never `console.log` directly
+- Log in hooks only (not components). Log level controlled by `VITE_LOG_LEVEL` env var
 
 ## Voice call rules
 
