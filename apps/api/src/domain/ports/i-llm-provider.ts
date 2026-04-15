@@ -1,5 +1,3 @@
-import type { Result } from "@call-cc/types";
-
 export interface LlmTool {
   name: string;
   description: string;
@@ -12,5 +10,14 @@ export interface LlmMessage {
 }
 
 export interface ILlmProvider {
-  chat(messages: LlmMessage[], tools: LlmTool[], signal: AbortSignal): Promise<Result<string>>;
+  /**
+   * Streams the LLM response token by token.
+   * The consumer is responsible for assembling the full text if needed.
+   * Throws on error — callers should wrap with try/catch.
+   */
+  stream(
+    messages: LlmMessage[],
+    tools: LlmTool[],
+    signal: AbortSignal,
+  ): AsyncGenerator<string, void>;
 }

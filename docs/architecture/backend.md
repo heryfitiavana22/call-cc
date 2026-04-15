@@ -58,21 +58,24 @@ const llm = new OpenAILlmAdapter();
 ## Audio Flow
 
 ```
-Browser mic
-  │  WebSocket (audio chunks)
+Browser mic (VAD)
+  │  WebSocket (WAV binary + { type: 'speech.end' })
   ▼
 Backend (Hono + @hono/node-ws)
   │
-  ├── ISttProvider.transcribe(chunk, signal) → Transcript
+  ├── ISttProvider.transcribe(wavBuffer, signal) → Transcript
   │
-  ├── ILlmProvider.chat(messages, tools, signal) → string
+  ├── ILlmProvider.stream(messages, tools, signal) → AsyncGenerator<string>
+  │     tokens buffered until sentence boundary (.!?)
   │
-  └── ITtsProvider.synthesize(text, signal) → ArrayBuffer
-          │
-          │  WebSocket (audio chunks)
+  └── ITtsProvider.synthesize(sentence, signal) → ArrayBuffer
+          │  (one call per sentence — streaming TTS)
+          │  WebSocket (ArrayBuffer = mp3, one per sentence)
           ▼
-      Browser plays audio
+      Browser plays audio chunks as they arrive
 ```
+
+See `docs/architecture/audio-flow.md` for full protocol details, barge-in handling, and sentence-level TTS streaming rationale.
 
 ## Configuration
 

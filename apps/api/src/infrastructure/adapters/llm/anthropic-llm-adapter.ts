@@ -1,17 +1,13 @@
-import type { Result } from "@call-cc/types";
-import { err } from "@call-cc/types";
 import type { ILlmProvider, LlmMessage, LlmTool } from "@/domain/ports/i-llm-provider";
 
 export class AnthropicLlmAdapter implements ILlmProvider {
-  async chat(
-    messages: LlmMessage[],
-    tools: LlmTool[],
-    signal: AbortSignal,
-  ): Promise<Result<string>> {
-    // TODO: implement Anthropic Claude chat completion via Vercel AI SDK v6
-    void messages;
-    void tools;
-    void signal;
-    return err(new Error("AnthropicLlmAdapter not yet implemented"));
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async *stream(
+    _messages: LlmMessage[],
+    _tools: LlmTool[],
+    _signal: AbortSignal,
+  ): AsyncGenerator<string, void> {
+    // TODO: implement Anthropic Claude streaming via Vercel AI SDK v6
+    throw new Error("AnthropicLlmAdapter not yet implemented");
   }
 }

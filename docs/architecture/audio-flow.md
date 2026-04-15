@@ -11,16 +11,31 @@ Browser mic → VAD (@ricky0123/vad-web, Silero model)
 Backend AudioStreamHandler
   │  accumulates binary chunks until speech.end
   │
-  ├── STT: ISttProvider.transcribe(wavBuffer, signal)
-  ├── LLM: ILlmProvider.chat(messages, tools, signal)
-  └── TTS: ITtsProvider.synthesize(text, signal)
+  ├── STT: ISttProvider.transcribe(wavBuffer, signal) → transcript
+  │
+  ├── LLM: ILlmProvider.stream(messages, tools, signal) → AsyncGenerator<string>
+  │         tokens accumulated until sentence boundary (.!?)
+  │         each sentence synthesized immediately (streaming TTS)
+  │
+  └── TTS: ITtsProvider.synthesize(sentence, signal) → ArrayBuffer
+          │  (called once per sentence, not once per full reply)
           │
-          │  WebSocket (ArrayBuffer = mp3 audio)
+          │  WebSocket (ArrayBuffer = mp3 audio chunk, one per sentence)
           ▼
       Browser AudioContext.decodeAudioData → play
+      (first sentence plays while LLM still generating the rest)
 ```
 
 Audio format: VAD provides Float32Array at 16kHz mono → frontend encodes as WAV (44-byte header + Int16 PCM) before sending.
+
+### Sentence-level TTS Streaming
+
+The LLM response is streamed token by token. Tokens are buffered until a sentence boundary
+(`.`, `!`, `?`) is detected. Each complete sentence is immediately synthesized and sent to the
+client — without waiting for the full LLM reply to complete.
+
+This means the first audio chunk arrives in ~(STT latency + LLM first-sentence latency + TTS latency),
+rather than waiting for the full response to be generated.
 
 ## Barge-in (User Interrupts Agent)
 

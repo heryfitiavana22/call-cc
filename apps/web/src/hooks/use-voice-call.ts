@@ -63,6 +63,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   const vadRef = useRef<MicVAD | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const isAgentSpeakingRef = useRef(false);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
 
   const send = useCallback((message: ClientMessage) => {
     wsRef.current?.send(JSON.stringify(message));
@@ -101,12 +102,27 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     }
   }, []);
 
+  const stopAllAudio = useCallback(() => {
+    activeSourcesRef.current.forEach((s) => {
+      try {
+        s.stop();
+      } catch {
+        // already stopped
+      }
+    });
+    activeSourcesRef.current = [];
+  }, []);
+
   const playAudioChunk = useCallback(async (buffer: ArrayBuffer) => {
     if (!audioContextRef.current) return;
     const audioBuffer = await audioContextRef.current.decodeAudioData(buffer.slice(0));
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioContextRef.current.destination);
+    source.onended = () => {
+      activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+    };
+    activeSourcesRef.current.push(source);
     source.start();
   }, []);
 
@@ -159,6 +175,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
             // Barge-in: user speaks while agent is speaking
             if (isAgentSpeakingRef.current) {
               logger.info("Barge-in: interrupting agent");
+              stopAllAudio();
               isAgentSpeakingRef.current = false;
               send({ type: "interrupt" });
               setState("listening");

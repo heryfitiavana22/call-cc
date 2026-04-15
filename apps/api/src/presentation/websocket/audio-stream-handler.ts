@@ -105,6 +105,10 @@ export class AudioStreamHandler {
       audioBuffer,
       this.history,
       this.abortController.signal,
+      {
+        onTranscript: (text) => this.send(ws, { type: "transcript", text, final: true }),
+        onAudioChunk: (audio) => ws.send(audio),
+      },
     );
 
     if (!result.ok) {
@@ -116,9 +120,6 @@ export class AudioStreamHandler {
 
     this.history.push({ role: "user", content: result.value.transcript });
     this.history.push({ role: "assistant", content: result.value.agentReply });
-    this.send(ws, { type: "transcript", text: result.value.transcript, final: true });
-
-    ws.send(result.value.audioResponse);
 
     this.send(ws, { type: "ready" });
     this.session.transition("listening");
