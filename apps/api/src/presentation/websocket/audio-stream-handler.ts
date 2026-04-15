@@ -100,11 +100,14 @@ export class AudioStreamHandler {
     const audioBuffer = mergeBuffers(this.audioChunks);
     this.audioChunks = [];
 
+    // Capture the signal now — an interrupt may replace abortController before execute() returns
+    const signal = this.abortController.signal;
+
     const result = await this.processAudioChunk.execute(
       this.session,
       audioBuffer,
       this.history,
-      this.abortController.signal,
+      signal,
       {
         onTranscript: (text) => this.send(ws, { type: "transcript", text, final: true }),
         onAudioChunk: (audio) => ws.send(audio),
@@ -112,14 +115,19 @@ export class AudioStreamHandler {
     );
 
     if (!result.ok) {
+      // Barge-in aborted this operation — interrupt handler already reset the session
+      if (signal.aborted) return;
       this.send(ws, { type: "error", message: result.error.message });
       this.send(ws, { type: "ready" });
       this.session.transition("listening");
       return;
     }
 
-    this.history.push({ role: "user", content: result.value.transcript });
-    this.history.push({ role: "assistant", content: result.value.agentReply });
+    // Only push non-empty exchanges to history
+    if (result.value.transcript) {
+      this.history.push({ role: "user", content: result.value.transcript });
+      this.history.push({ role: "assistant", content: result.value.agentReply });
+    }
 
     this.send(ws, { type: "ready" });
     this.session.transition("listening");

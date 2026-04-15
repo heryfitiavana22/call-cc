@@ -58,6 +58,14 @@ export class ProcessAudioChunk {
       return err(transcriptResult.error);
     }
 
+    if (transcriptResult.value.isEmpty) {
+      logger.info(
+        { sessionId, sttMs },
+        "STT returned empty transcript — no speech detected, skipping",
+      );
+      return ok({ transcript: "", agentReply: "" });
+    }
+
     logger.info({ sessionId, transcript: transcriptResult.value.text, sttMs }, "STT completed");
     callbacks.onTranscript(transcriptResult.value.text);
 

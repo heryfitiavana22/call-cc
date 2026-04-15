@@ -3,8 +3,11 @@ export class Transcript {
   readonly isFinal: boolean;
 
   constructor(text: string, isFinal = true) {
-    if (!text.trim()) throw new Error("Transcript text cannot be empty");
     this.text = text.trim();
     this.isFinal = isFinal;
+  }
+
+  get isEmpty(): boolean {
+    return this.text.length === 0;
   }
 }
