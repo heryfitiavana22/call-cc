@@ -1,11 +1,11 @@
 import type { WSContext } from "hono/ws";
 import type { ClientMessage, ServerMessage } from "@call-cc/types";
 import { clientMessageSchema } from "@call-cc/types";
-import type { ProcessAudioChunk } from "../../application/use-cases/process-audio-chunk.js";
-import type { StartVoiceSession } from "../../application/use-cases/start-voice-session.js";
-import type { EndVoiceSession } from "../../application/use-cases/end-voice-session.js";
-import type { VoiceSession } from "../../domain/entities/voice-session.js";
-import type { LlmMessage } from "../../domain/ports/i-llm-provider.js";
+import type { ProcessAudioChunk } from "@/application/use-cases/process-audio-chunk";
+import type { StartVoiceSession } from "@/application/use-cases/start-voice-session";
+import type { EndVoiceSession } from "@/application/use-cases/end-voice-session";
+import type { VoiceSession } from "@/domain/entities/voice-session";
+import type { LlmMessage } from "@/domain/ports/i-llm-provider";
 
 const SESSION_ID_LENGTH = 8;
 

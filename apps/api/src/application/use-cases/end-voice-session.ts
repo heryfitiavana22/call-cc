@@ -1,4 +1,4 @@
-import type { VoiceSession } from "../../domain/entities/voice-session.js";
+import type { VoiceSession } from "@/domain/entities/voice-session";
 
 export class EndVoiceSession {
   execute(session: VoiceSession): void {

@@ -1,6 +1,6 @@
 import type { Result } from "@call-cc/types";
 import { err } from "@call-cc/types";
-import type { ILlmProvider, LlmMessage, LlmTool } from "../../../domain/ports/i-llm-provider.js";
+import type { ILlmProvider, LlmMessage, LlmTool } from "@/domain/ports/i-llm-provider";
 
 export class OpenAILlmAdapter implements ILlmProvider {
   async chat(

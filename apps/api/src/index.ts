@@ -1,9 +1,9 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { createNodeWebSocket } from "@hono/node-ws";
-import { env } from "./config/env.js";
-import { createVoiceRoute } from "./presentation/routes/voice-route.js";
-import { container } from "./container.js";
+import { env } from "@/config/env";
+import { createVoiceRoute } from "@/presentation/routes/voice-route";
+import { container } from "@/container";
 
 const app = new Hono();
 
@@ -13,10 +13,8 @@ app.route("/voice", createVoiceRoute(container, upgradeWebSocket));
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-const PORT = env.PORT;
-
-const server = serve({ fetch: app.fetch, port: PORT }, () => {
-  console.log(`API running on http://localhost:${PORT}`);
+const server = serve({ fetch: app.fetch, port: env.PORT }, () => {
+  console.log(`API running on http://localhost:${env.PORT}`);
 });
 
 injectWebSocket(server);

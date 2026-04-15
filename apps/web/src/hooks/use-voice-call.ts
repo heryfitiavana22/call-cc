@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CallState, ClientMessage, ServerMessage } from "@call-cc/types";
 import { serverMessageSchema } from "@call-cc/types";
-import { env } from "../config/env.js";
+import { env } from "@/config/env";
 
 export interface UseVoiceCallReturn {
   state: CallState;

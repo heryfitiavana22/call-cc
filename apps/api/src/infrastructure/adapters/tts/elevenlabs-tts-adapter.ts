@@ -1,6 +1,6 @@
 import type { Result } from "@call-cc/types";
 import { err } from "@call-cc/types";
-import type { ITtsProvider } from "../../../domain/ports/i-tts-provider.js";
+import type { ITtsProvider } from "@/domain/ports/i-tts-provider";
 
 export class ElevenLabsTtsAdapter implements ITtsProvider {
   async synthesize(text: string, signal: AbortSignal): Promise<Result<ArrayBuffer>> {

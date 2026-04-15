@@ -1,9 +1,9 @@
-import { DeepgramSttAdapter } from "./infrastructure/adapters/stt/deepgram-stt-adapter.js";
-import { OpenAITtsAdapter } from "./infrastructure/adapters/tts/openai-tts-adapter.js";
-import { OpenAILlmAdapter } from "./infrastructure/adapters/llm/openai-llm-adapter.js";
-import { StartVoiceSession } from "./application/use-cases/start-voice-session.js";
-import { ProcessAudioChunk } from "./application/use-cases/process-audio-chunk.js";
-import { EndVoiceSession } from "./application/use-cases/end-voice-session.js";
+import { DeepgramSttAdapter } from "@/infrastructure/adapters/stt/deepgram-stt-adapter";
+import { OpenAITtsAdapter } from "@/infrastructure/adapters/tts/openai-tts-adapter";
+import { OpenAILlmAdapter } from "@/infrastructure/adapters/llm/openai-llm-adapter";
+import { StartVoiceSession } from "@/application/use-cases/start-voice-session";
+import { ProcessAudioChunk } from "@/application/use-cases/process-audio-chunk";
+import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 
 /**
  * Dependency container — instantiates and injects adapters into use cases.

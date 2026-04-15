@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import type { NodeWebSocket } from "@hono/node-ws";
 import type { WSContext } from "hono/ws";
-import { AudioStreamHandler } from "../websocket/audio-stream-handler.js";
-import type { AppContainer } from "../../container.js";
+import { AudioStreamHandler } from "@/presentation/websocket/audio-stream-handler";
+import type { AppContainer } from "@/container";
 
 export const createVoiceRoute = (
   container: AppContainer,

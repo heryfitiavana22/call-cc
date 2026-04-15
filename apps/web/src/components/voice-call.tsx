@@ -1,4 +1,4 @@
-import { useVoiceCall } from "../hooks/use-voice-call.js";
+import { useVoiceCall } from "@/hooks/use-voice-call";
 import type { CallState } from "@call-cc/types";
 
 const STATE_LABEL: Record<CallState, string> = {

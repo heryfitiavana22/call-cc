@@ -1,4 +1,4 @@
-import { VoiceCall } from "./components/voice-call.js";
+import { VoiceCall } from "@/components/voice-call";
 
 const App = () => {
   return <VoiceCall />;

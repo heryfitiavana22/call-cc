@@ -1,9 +1,9 @@
 import type { Result } from "@call-cc/types";
 import { err } from "@call-cc/types";
-import type { ISttProvider } from "../../domain/ports/i-stt-provider.js";
-import type { ITtsProvider } from "../../domain/ports/i-tts-provider.js";
-import type { ILlmProvider, LlmMessage } from "../../domain/ports/i-llm-provider.js";
-import type { VoiceSession } from "../../domain/entities/voice-session.js";
+import type { ISttProvider } from "@/domain/ports/i-stt-provider";
+import type { ITtsProvider } from "@/domain/ports/i-tts-provider";
+import type { ILlmProvider, LlmMessage } from "@/domain/ports/i-llm-provider";
+import type { VoiceSession } from "@/domain/entities/voice-session";
 
 export interface ProcessAudioChunkResult {
   transcript: string;
