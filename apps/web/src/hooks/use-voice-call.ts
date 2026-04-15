@@ -151,7 +151,12 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       logger.debug("MediaRecorder mimeType selected", { mimeType: mimeType ?? "browser default" });
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
 
+      recorder.onerror = (e) => {
+        logger.error("MediaRecorder error", { error: String(e) });
+      };
+
       recorder.ondataavailable = (e: BlobEvent) => {
+        logger.debug("ondataavailable fired", { size: e.data.size });
         if (e.data.size === 0) return;
         if (ws.readyState !== WebSocket.OPEN) return;
 
@@ -173,7 +178,8 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
           .catch(() => null);
       };
 
-      recorder.start(100); // chunk every 100ms
+      recorder.start(100);
+      logger.info("MediaRecorder started", { mimeType: recorder.mimeType, state: recorder.state });
 
       // VAD integration point: @ricky0123/vad-web (Silero VAD)
       // Replace resetSilenceTimer with VAD speech-end events for accurate detection
