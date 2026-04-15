@@ -1,17 +1,19 @@
 import pino from "pino";
+import { env } from "@/config/env";
 
 /**
  * Application-wide logger.
  * - Development: pretty-printed output via pino-pretty
  * - Production: structured JSON output
+ * Log level is controlled by LOG_LEVEL env var (default: "info").
  */
 export const logger =
-  process.env["NODE_ENV"] !== "production"
+  env.NODE_ENV !== "production"
     ? pino({
-        level: process.env["LOG_LEVEL"] ?? "info",
+        level: env.LOG_LEVEL,
         transport: {
           target: "pino-pretty",
           options: { colorize: true, translateTime: "HH:MM:ss" },
         },
       })
-    : pino({ level: process.env["LOG_LEVEL"] ?? "info" });
+    : pino({ level: env.LOG_LEVEL });

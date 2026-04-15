@@ -25,3 +25,4 @@
 | ESLint 9    | Flat config (`eslint.config.js`), shared from `packages/eslint-config` |
 | Vitest      | Testing — TypeScript-native, Turborepo-compatible                      |
 | Zod         | Runtime validation — env vars, WebSocket messages                      |
+| pino        | Structured logging (JSON in prod, pretty-print in dev via pino-pretty) |

@@ -7,6 +7,8 @@ See root `CLAUDE.md` and `docs/ARCHITECTURE.md` for project-wide rules.
 - Runtime: **Node.js** with Hono v4+
 - WebSocket: `@hono/node-ws` via `createNodeWebSocket`
 - All environment variables must be validated via Zod in `src/config/env.ts` — fail fast at startup
+- Logger: `pino` via `src/shared/logger.ts` — always use this, never `console.log`
+- Log in: `presentation/` (WS lifecycle), `application/` (use case steps + timing). Never in `domain/`
 
 ## Hexagonal architecture rules
 
