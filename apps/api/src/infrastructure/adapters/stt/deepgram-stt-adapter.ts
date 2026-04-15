@@ -25,16 +25,13 @@ class DeepgramSttStream implements ISttStream {
 
   constructor(private readonly connPromise: Promise<DeepgramConn>) {
     connPromise
-      .then((conn) => {
+      .then(async (conn) => {
         if (this.aborted) {
           conn.close();
           return;
         }
-        this.conn = conn;
 
-        for (const chunk of this.pending) conn.sendMedia(chunk);
-        this.pending = [];
-
+        // Register handlers before waitForOpen so we never miss a close/error
         conn.on("message", (msg) => {
           if (msg.type === "Results" && msg.is_final) {
             const text = msg.channel?.alternatives?.[0]?.transcript;
@@ -50,6 +47,20 @@ class DeepgramSttStream implements ISttStream {
           const error = e instanceof Error ? e : new Error(String(e));
           for (const cb of this.errorCallbacks) cb(error);
         });
+
+        // Wait for the WebSocket handshake to complete before sending anything
+        await conn.waitForOpen();
+
+        if (this.aborted) {
+          conn.close();
+          return;
+        }
+
+        this.conn = conn;
+
+        // Flush chunks that arrived before the socket was ready
+        for (const chunk of this.pending) conn.sendMedia(chunk);
+        this.pending = [];
       })
       .catch((e) => {
         const error = e instanceof Error ? e : new Error(String(e));
@@ -59,6 +70,7 @@ class DeepgramSttStream implements ISttStream {
 
   write(chunk: ArrayBuffer): void {
     if (this.aborted) return;
+    // this.conn is only set after waitForOpen() — safe to call sendMedia directly
     if (this.conn) {
       this.conn.sendMedia(chunk);
     } else {
@@ -77,11 +89,10 @@ class DeepgramSttStream implements ISttStream {
         resolve(err(e));
       });
 
-      // Wait for the connection (no-op if already open), then send Finalize.
-      // The constructor's .then runs first (pending flushed, handlers set),
-      // then this .then triggers finalize — guaranteed by Promise microtask order.
+      // Wait until the socket is fully open (pending flush done), then finalize.
       this.connPromise
-        .then((conn) => {
+        .then(async (conn) => {
+          await conn.waitForOpen();
           conn.sendFinalize({ type: "Finalize" });
         })
         .catch((e) => {
