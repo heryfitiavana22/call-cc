@@ -1,0 +1,13 @@
+{
+  "name": "@call-cc/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@call-cc/tsconfig": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}
