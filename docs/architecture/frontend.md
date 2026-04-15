@@ -4,7 +4,8 @@
 
 - **React 19** + Vite
 - **Tailwind CSS v4** — configured via `@tailwindcss/vite` plugin, no config file
-- **shadcn/ui** — components in `src/components/ui/`, uses shadcn CSS variables
+- **shadcn/ui** — components in `src/components/ui/`, uses shadcn CSS variables only
+  - Use variant props for intent, `className` for layout only — never override CVA via className
 
 ## Structure
 
