@@ -5,6 +5,8 @@ import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 // import { GroqSttAdapter } from "./infrastructure/adapters/stt/groq-stt-adapter";
 import { DeepgramSttAdapter } from "./infrastructure/adapters/stt/deepgram-stt-adapter";
+import { buildSystemPrompt } from "./config/agent-prompt";
+import { env } from "./config/env";
 
 /**
  * Dependency container — instantiates and injects adapters into use cases.
@@ -24,8 +26,10 @@ const buildContainer = () => {
   const startVoiceSession = new StartVoiceSession();
   const endVoiceSession = new EndVoiceSession();
 
+  const systemPrompt = buildSystemPrompt(env.AGENT_LANGUAGE);
+
   // Factory — creates a fresh ProcessVoiceTurn per WebSocket connection
-  const createProcessVoiceTurn = () => new ProcessVoiceTurn(stt, llm, tts);
+  const createProcessVoiceTurn = () => new ProcessVoiceTurn(stt, llm, tts, systemPrompt);
 
   return {
     startVoiceSession,

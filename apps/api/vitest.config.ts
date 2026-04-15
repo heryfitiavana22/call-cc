@@ -11,7 +11,7 @@ export default defineConfig({
       NODE_ENV: "test",
       OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "test-key",
       DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY ?? "test-key",
-      DEEPGRAM_LANGUAGE: process.env.DEEPGRAM_LANGUAGE ?? "fr",
+      AGENT_LANGUAGE: process.env.AGENT_LANGUAGE ?? "fr",
       LOG_LEVEL: "fatal",
     },
   },

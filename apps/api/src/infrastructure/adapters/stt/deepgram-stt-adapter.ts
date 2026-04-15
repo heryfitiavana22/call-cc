@@ -88,6 +88,6 @@ export class DeepgramSttAdapter implements ISttProvider {
   }
 
   createStream(): ISttStream {
-    return new DeepgramSttStream(this.client, env.DEEPGRAM_LANGUAGE ?? "fr");
+    return new DeepgramSttStream(this.client, env.AGENT_LANGUAGE ?? env.AGENT_LANGUAGE);
   }
 }

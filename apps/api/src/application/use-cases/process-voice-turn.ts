@@ -46,6 +46,7 @@ export class ProcessVoiceTurn {
     private readonly stt: ISttProvider,
     private readonly llm: ILlmProvider,
     private readonly tts: ITtsProvider,
+    private readonly systemPrompt = "",
   ) {}
 
   /** Open a new STT stream. Call once per utterance, before addChunk(). */
@@ -94,7 +95,11 @@ export class ProcessVoiceTurn {
     callbacks.onTranscript(transcriptResult.value.text);
 
     // LLM stream → sentence-level TTS
+    const systemMessages: LlmMessage[] = this.systemPrompt
+      ? [{ role: "system", content: this.systemPrompt }]
+      : [];
     const messages: LlmMessage[] = [
+      ...systemMessages,
       ...history,
       { role: "user", content: transcriptResult.value.text },
     ];

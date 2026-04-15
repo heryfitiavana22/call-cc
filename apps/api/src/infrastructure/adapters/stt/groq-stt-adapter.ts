@@ -64,7 +64,7 @@ export class GroqSttAdapter implements ISttProvider {
 
   constructor() {
     this.client = new Groq({ apiKey: env.GROQ_API_KEY });
-    this.language = env.DEEPGRAM_LANGUAGE; // reuse same BCP-47 language setting
+    this.language = env.AGENT_LANGUAGE;
   }
 
   createStream(): ISttStream {
