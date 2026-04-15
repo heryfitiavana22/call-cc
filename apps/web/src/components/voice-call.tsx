@@ -49,11 +49,8 @@ export const VoiceCall = () => {
   return (
     <div className="flex h-svh flex-col">
       {/* Header */}
-      <header className="flex items-baseline justify-between border-b px-5 py-4">
+      <header className="border-b px-5 py-4">
         <span className="text-sm font-medium">Léa</span>
-        {state !== "idle" && (
-          <span className="text-xs text-muted-foreground">{STATUS_LABEL[state]}</span>
-        )}
       </header>
 
       {/* Messages */}
@@ -75,7 +72,10 @@ export const VoiceCall = () => {
       {error && <p className="px-5 pb-2 text-sm text-destructive">{error}</p>}
 
       {/* Footer */}
-      <footer className="border-t px-4 py-3">
+      <footer className="border-t px-4 pb-4 pt-3">
+        {isActive && STATUS_LABEL[state] && (
+          <p className="mb-3 text-center text-sm text-foreground">{STATUS_LABEL[state]}</p>
+        )}
         {!isActive ? (
           <Button onClick={() => void startCall()} className="w-full" size="lg">
             Démarrer l'appel
