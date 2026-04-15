@@ -89,11 +89,13 @@ class DeepgramSttStream implements ISttStream {
         resolve(err(e));
       });
 
-      // Wait until the socket is fully open (pending flush done), then finalize.
+      // Wait until the socket is fully open (pending flush done), then close the stream.
+      // sendCloseStream tells Deepgram to flush remaining audio, emit final results,
+      // and close the connection — which triggers the 'close' event we await above.
       this.connPromise
         .then(async (conn) => {
           await conn.waitForOpen();
-          conn.sendFinalize({ type: "Finalize" });
+          conn.sendCloseStream({ type: "CloseStream" });
         })
         .catch((e) => {
           resolve(err(e instanceof Error ? e : new Error(String(e))));
