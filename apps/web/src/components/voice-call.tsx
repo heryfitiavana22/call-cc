@@ -81,12 +81,7 @@ export const VoiceCall = () => {
             Démarrer l'appel
           </Button>
         ) : (
-          <Button
-            onClick={endCall}
-            variant="outline"
-            className="w-full text-destructive hover:text-destructive"
-            size="lg"
-          >
+          <Button onClick={endCall} variant="destructive" className="w-full" size="lg">
             Terminer l'appel
           </Button>
         )}
