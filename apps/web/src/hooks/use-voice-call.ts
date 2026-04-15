@@ -4,7 +4,11 @@ import { serverMessageSchema } from "@call-cc/types";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 
-// How long to wait after the last audio chunk before signalling speech end.
+// RMS amplitude threshold (0–128 scale) above which we consider the user is speaking.
+// Tune this down if speech is not detected, up if background noise triggers it.
+const SPEECH_RMS_THRESHOLD = 8;
+
+// How long the RMS must stay below threshold before signalling speech end.
 // Will be replaced by VAD (Silero via @ricky0123/vad-web) in the next step.
 const SILENCE_TIMEOUT_MS = 1500;
 
@@ -27,6 +31,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   const isAgentSpeakingRef = useRef(false);
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speechCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const send = useCallback((message: ClientMessage) => {
     wsRef.current?.send(JSON.stringify(message));
@@ -83,20 +88,11 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     setState("listening");
   }, [send]);
 
-  /**
-   * Resets the silence timer.
-   * When the timer fires, it signals the backend that speech has ended.
-   * This is a fallback until VAD (@ricky0123/vad-web) is integrated.
-   */
-  const resetSilenceTimer = useCallback((ws: WebSocket) => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    silenceTimerRef.current = setTimeout(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        logger.info("Silence detected — sending speech.end");
-        setState("processing");
-        ws.send(JSON.stringify({ type: "speech.end" } satisfies ClientMessage));
-      }
-    }, SILENCE_TIMEOUT_MS);
+  const stopSpeechCheck = useCallback(() => {
+    if (speechCheckIntervalRef.current) {
+      clearInterval(speechCheckIntervalRef.current);
+      speechCheckIntervalRef.current = null;
+    }
   }, []);
 
   const startCall = useCallback(async () => {
@@ -137,6 +133,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
 
     ws.onclose = () => {
       logger.info("WebSocket closed");
+      stopSpeechCheck();
       setState("idle");
       stream.getTracks().forEach((t) => t.stop());
       if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
@@ -152,6 +149,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
         MediaRecorder.isTypeSupported(m),
       );
       logger.debug("MediaRecorder mimeType selected", { mimeType: mimeType ?? "browser default" });
+
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
       recorderRef.current = recorder;
 
@@ -159,14 +157,13 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
         logger.error("MediaRecorder error", { error: String(e) });
       };
 
+      // Send audio chunks to the backend for accumulation.
+      // Barge-in check: if the agent is speaking, interrupt it.
       recorder.ondataavailable = (e: BlobEvent) => {
-        logger.debug("ondataavailable fired", { size: e.data.size });
         if (e.data.size === 0) return;
         if (ws.readyState !== WebSocket.OPEN) return;
 
-        // Only send audio when the user is speaking (not when agent is speaking)
         if (isAgentSpeakingRef.current) {
-          // Barge-in: user speaks while agent is speaking → interrupt
           interrupt();
           return;
         }
@@ -176,8 +173,6 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
           .then((buf) => {
             logger.debug("Audio chunk sent", { bytes: buf.byteLength });
             ws.send(buf);
-            // Reset silence timer on every audio chunk
-            resetSilenceTimer(ws);
           })
           .catch(() => null);
       };
@@ -185,9 +180,38 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       recorder.start(100);
       logger.info("MediaRecorder started", { mimeType: recorder.mimeType, state: recorder.state });
 
-      // VAD integration point: @ricky0123/vad-web (Silero VAD)
-      // Replace resetSilenceTimer with VAD speech-end events for accurate detection
-      // TODO: integrate VAD in next step
+      // Speech detection via AnalyserNode RMS energy.
+      // The silence timer only resets when the user's voice is above the threshold.
+      // This replaces the naive "reset on every chunk" approach which never detected silence.
+      // TODO: replace with VAD (@ricky0123/vad-web) in next step.
+      const analyser = audioContextRef.current!.createAnalyser();
+      analyser.fftSize = 256;
+      const source = audioContextRef.current!.createMediaStreamSource(stream);
+      source.connect(analyser);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      speechCheckIntervalRef.current = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN || isAgentSpeakingRef.current) return;
+
+        analyser.getByteTimeDomainData(dataArray);
+        // RMS on a 0–128 centered scale (128 = silence in Web Audio API)
+        const rms = Math.sqrt(
+          dataArray.reduce((sum, v) => sum + (v - 128) ** 2, 0) / dataArray.length,
+        );
+        logger.debug("Audio RMS", { rms: Math.round(rms) });
+
+        if (rms > SPEECH_RMS_THRESHOLD) {
+          // User is speaking — reset the silence countdown
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              logger.info("Silence detected — sending speech.end");
+              setState("processing");
+              ws.send(JSON.stringify({ type: "speech.end" } satisfies ClientMessage));
+            }
+          }, SILENCE_TIMEOUT_MS);
+        }
+      }, 100);
     };
 
     ws.onerror = () => {
@@ -195,23 +219,25 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       setError("WebSocket connection failed");
       setState("idle");
     };
-  }, [handleServerMessage, interrupt, playAudioChunk, resetSilenceTimer]);
+  }, [handleServerMessage, interrupt, playAudioChunk, stopSpeechCheck]);
 
   const endCall = useCallback(() => {
+    stopSpeechCheck();
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     send({ type: "session.end" });
     wsRef.current?.close();
     audioContextRef.current?.close().catch(() => null);
-  }, [send]);
+  }, [send, stopSpeechCheck]);
 
   useEffect(() => {
     return () => {
+      stopSpeechCheck();
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
       wsRef.current?.close();
       audioContextRef.current?.close().catch(() => null);
     };
-  }, []);
+  }, [stopSpeechCheck]);
 
   return { state, transcript, error, startCall, endCall };
 };
