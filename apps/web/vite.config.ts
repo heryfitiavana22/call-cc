@@ -1,11 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(),
     // Copy VAD assets (WASM + worklet + ONNX models) to the public root.
     // Required by @ricky0123/vad-web — these files must be served at the root URL.
     viteStaticCopy({

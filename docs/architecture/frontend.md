@@ -1,13 +1,22 @@
 # Frontend Architecture
 
+## Stack
+
+- **React 19** + Vite
+- **Tailwind CSS v4** — configured via `@tailwindcss/vite` plugin, no config file
+- **shadcn/ui** — components in `src/components/ui/`, uses shadcn CSS variables
+
 ## Structure
 
 ```
 apps/web/src/
 ├── components/
-│   └── voice-call.tsx          # Main voice call UI
+│   ├── voice-call.tsx          # Main voice call UI (header, messages, controls)
+│   └── ui/                     # shadcn components (button, scroll-area, …)
 ├── hooks/
-│   └── use-voice-call.ts       # Core hook: state machine + WebSocket + VAD
+│   └── use-voice-call.ts       # Core hook: state machine + WebSocket + VAD + messages
+├── lib/
+│   └── utils.ts                # shadcn cn() utility
 └── config/
     └── env.ts                  # Zod-validated env vars
 ```
@@ -53,6 +62,19 @@ See [audio-flow.md](./audio-flow.md) for the full interruption sequence.
 ## WebSocket Protocol
 
 See [audio-flow.md](./audio-flow.md) for the full message protocol.
+
+## Conversation history
+
+`useVoiceCall` tracks a `messages: Message[]` array — one entry per turn:
+
+| Field  | Type                | Description                        |
+| ------ | ------------------- | ---------------------------------- |
+| `id`   | `string`            | Unique identifier                  |
+| `role` | `"user" \| "agent"` | Who sent the message               |
+| `text` | `string`            | Transcript (user) or reply (agent) |
+
+User messages come from `{ type: "transcript", final: true }` WS messages.
+Agent messages come from `{ type: "agent.reply" }` WS messages (sent by backend after TTS).
 
 ## Environment Variables
 

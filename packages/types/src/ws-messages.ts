@@ -18,6 +18,7 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
 export const serverMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ready") }),
   z.object({ type: z.literal("transcript"), text: z.string(), final: z.boolean() }),
+  z.object({ type: z.literal("agent.reply"), text: z.string() }),
   z.object({ type: z.literal("error"), message: z.string() }),
   z.object({ type: z.literal("session.started") }),
   z.object({ type: z.literal("session.ended") }),

@@ -94,6 +94,7 @@ export class AudioStreamHandler {
     if (result.value.transcript) {
       this.history.push({ role: "user", content: result.value.transcript });
       this.history.push({ role: "assistant", content: result.value.agentReply });
+      this.send(ws, { type: "agent.reply", text: result.value.agentReply });
     }
 
     // Open a new stream for the next utterance

@@ -5,9 +5,15 @@ import { serverMessageSchema } from "@call-cc/types";
 import { env } from "@/config/env";
 import { logger } from "@/shared/logger";
 
+export interface Message {
+  id: string;
+  role: "user" | "agent";
+  text: string;
+}
+
 export interface UseVoiceCallReturn {
   state: CallState;
-  transcript: string;
+  messages: Message[];
   error: string | null;
   startCall: () => Promise<void>;
   endCall: () => void;
@@ -54,10 +60,16 @@ const float32ToWav = (float32: Float32Array, sampleRate = 16000): ArrayBuffer =>
   return buffer;
 };
 
+const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
 export const useVoiceCall = (): UseVoiceCallReturn => {
   const [state, setState] = useState<CallState>("idle");
-  const [transcript, setTranscript] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const addMessage = useCallback((role: Message["role"], text: string) => {
+    setMessages((prev) => [...prev, { id: makeId(), role, text }]);
+  }, []);
 
   const wsRef = useRef<WebSocket | null>(null);
   const vadRef = useRef<MicVAD | null>(null);
@@ -75,43 +87,51 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     wsRef.current?.send(JSON.stringify(message));
   }, []);
 
-  const handleServerMessage = useCallback((message: ServerMessage) => {
-    logger.debug("Server message received", { type: message.type });
+  const handleServerMessage = useCallback(
+    (message: ServerMessage) => {
+      logger.debug("Server message received", { type: message.type });
 
-    if (message.type === "ready") {
-      // If audio is still playing, defer the transition until the queue is empty
-      if (isPlayingRef.current) {
-        pendingReadyRef.current = true;
-      } else {
-        isAgentSpeakingRef.current = false;
-        setState("listening");
+      if (message.type === "ready") {
+        if (isPlayingRef.current) {
+          pendingReadyRef.current = true;
+        } else {
+          isAgentSpeakingRef.current = false;
+          setState("listening");
+        }
+        return;
       }
-      return;
-    }
 
-    if (message.type === "transcript") {
-      logger.info("Transcript received", { text: message.text });
-      setTranscript(message.text);
-      return;
-    }
+      if (message.type === "transcript") {
+        logger.info("Transcript received", { text: message.text });
+        if (message.final) addMessage("user", message.text);
+        return;
+      }
 
-    if (message.type === "session.started") {
-      logger.info("Session started");
-      setState("listening");
-      return;
-    }
+      if (message.type === "agent.reply") {
+        logger.info("Agent reply received", { text: message.text });
+        addMessage("agent", message.text);
+        return;
+      }
 
-    if (message.type === "session.ended") {
-      logger.info("Session ended");
-      setState("idle");
-      return;
-    }
+      if (message.type === "session.started") {
+        logger.info("Session started");
+        setState("listening");
+        return;
+      }
 
-    if (message.type === "error") {
-      logger.error("Server error", { message: message.message });
-      setError(message.message);
-    }
-  }, []);
+      if (message.type === "session.ended") {
+        logger.info("Session ended");
+        setState("idle");
+        return;
+      }
+
+      if (message.type === "error") {
+        logger.error("Server error", { message: message.message });
+        setError(message.message);
+      }
+    },
+    [addMessage],
+  );
 
   const stopAllAudio = useCallback(() => {
     audioGenerationRef.current++;
@@ -171,7 +191,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
 
   const startCall = useCallback(async () => {
     setError(null);
-    setTranscript("");
+    setMessages([]);
 
     audioContextRef.current = new AudioContext();
 
@@ -269,5 +289,5 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     };
   }, []);
 
-  return { state, transcript, error, startCall, endCall };
+  return { state, messages, error, startCall, endCall };
 };
