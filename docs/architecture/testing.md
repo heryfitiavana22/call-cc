@@ -2,12 +2,13 @@
 
 ## Rule per layer
 
-| Layer                               | Test type   | Tools  | Mocks                                     |
-| ----------------------------------- | ----------- | ------ | ----------------------------------------- |
-| `domain/` (entities, value-objects) | Pure unit   | Vitest | None — no dependencies                    |
-| `application/` (use cases)          | Unit        | Vitest | Mocked ports (vi.fn() on interfaces)      |
-| `infrastructure/` (adapters)        | Integration | Vitest | None — real provider, real API keys       |
-| `presentation/` (routes, WS)        | Unit        | Vitest | Fake WSContext (vi.fn()) — no HTTP server |
+| Layer                               | Test type   | Tools                    | Mocks                                     |
+| ----------------------------------- | ----------- | ------------------------ | ----------------------------------------- |
+| `domain/` (entities, value-objects) | Pure unit   | Vitest                   | None — no dependencies                    |
+| `application/` (use cases)          | Unit        | Vitest                   | Mocked ports (vi.fn() on interfaces)      |
+| `infrastructure/` (adapters)        | Integration | Vitest                   | None — real provider, real API keys       |
+| `presentation/` (routes, WS)        | Unit        | Vitest                   | Fake WSContext (vi.fn()) — no HTTP server |
+| `apps/web/` (React)                 | Unit        | Vitest + Testing Library | `useVoiceCall` mocked via `vi.mock`       |
 
 **Single tool: Vitest** — TypeScript-native, Turborepo-compatible, fast.
 

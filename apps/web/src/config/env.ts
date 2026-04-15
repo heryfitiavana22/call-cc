@@ -12,4 +12,3 @@ if (!result.success) {
 }
 
 export const env = result.data;
-console.log("env", env);
