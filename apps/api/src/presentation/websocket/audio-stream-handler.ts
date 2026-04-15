@@ -6,6 +6,7 @@ import type { StartVoiceSession } from "@/application/use-cases/start-voice-sess
 import type { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 import type { VoiceSession } from "@/domain/entities/voice-session";
 import type { LlmMessage } from "@/domain/ports/i-llm-provider";
+import { logger } from "@/shared/logger";
 
 const SESSION_ID_LENGTH = 8;
 
@@ -44,10 +45,12 @@ export class AudioStreamHandler {
   onOpen(ws: WSContext): void {
     const result = this.startVoiceSession.execute(generateSessionId());
     if (!result.ok) {
+      logger.error({ err: result.error }, "Failed to start voice session");
       ws.close(1011, "Failed to start session");
       return;
     }
     this.session = result.value;
+    logger.info({ sessionId: this.session.id }, "Voice session opened");
     this.send(ws, { type: "session.started" });
     this.send(ws, { type: "ready" });
   }
@@ -68,6 +71,7 @@ export class AudioStreamHandler {
 
   onClose(): void {
     if (this.session) {
+      logger.info({ sessionId: this.session.id }, "Voice session closed");
       this.endVoiceSession.execute(this.session);
       this.session = null;
     }
@@ -127,6 +131,7 @@ export class AudioStreamHandler {
     }
 
     if (message.type === "interrupt") {
+      logger.info({ sessionId: this.session?.id }, "Barge-in interrupt received");
       this.abortController.abort();
       this.abortController = new AbortController();
       this.audioChunks = [];
