@@ -22,6 +22,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const isAgentSpeakingRef = useRef(false);
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
@@ -138,6 +139,8 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       logger.info("WebSocket closed");
       setState("idle");
       stream.getTracks().forEach((t) => t.stop());
+      if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
+      recorderRef.current = null;
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
 
@@ -150,6 +153,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       );
       logger.debug("MediaRecorder mimeType selected", { mimeType: mimeType ?? "browser default" });
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      recorderRef.current = recorder;
 
       recorder.onerror = (e) => {
         logger.error("MediaRecorder error", { error: String(e) });
@@ -203,6 +207,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   useEffect(() => {
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
       wsRef.current?.close();
       audioContextRef.current?.close().catch(() => null);
     };
