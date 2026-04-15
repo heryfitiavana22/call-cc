@@ -68,6 +68,8 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   const isPlayingRef = useRef(false);
   // Set to true when 'ready' arrives while audio is still playing — transition deferred until queue empties
   const pendingReadyRef = useRef(false);
+  // Incremented on stopAllAudio — invalidates in-flight decodeAudioData promises
+  const audioGenerationRef = useRef(0);
 
   const send = useCallback((message: ClientMessage) => {
     wsRef.current?.send(JSON.stringify(message));
@@ -112,6 +114,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   }, []);
 
   const stopAllAudio = useCallback(() => {
+    audioGenerationRef.current++;
     audioQueueRef.current = [];
     isPlayingRef.current = false;
     pendingReadyRef.current = false;
@@ -153,7 +156,11 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   const playAudioChunk = useCallback(
     async (buffer: ArrayBuffer) => {
       if (!audioContextRef.current) return;
+      // Capture the generation before the async decode — if stopAllAudio fires while we
+      // are awaiting, the generation will have changed and we discard the decoded chunk.
+      const gen = audioGenerationRef.current;
       const audioBuffer = await audioContextRef.current.decodeAudioData(buffer.slice(0));
+      if (gen !== audioGenerationRef.current) return;
       audioQueueRef.current.push(audioBuffer);
       if (!isPlayingRef.current) {
         playNextInQueue();
