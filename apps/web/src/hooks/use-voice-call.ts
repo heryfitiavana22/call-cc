@@ -64,6 +64,10 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const isAgentSpeakingRef = useRef(false);
   const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const audioQueueRef = useRef<AudioBuffer[]>([]);
+  const isPlayingRef = useRef(false);
+  // Set to true when 'ready' arrives while audio is still playing — transition deferred until queue empties
+  const pendingReadyRef = useRef(false);
 
   const send = useCallback((message: ClientMessage) => {
     wsRef.current?.send(JSON.stringify(message));
@@ -73,8 +77,13 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     logger.debug("Server message received", { type: message.type });
 
     if (message.type === "ready") {
-      isAgentSpeakingRef.current = false;
-      setState("listening");
+      // If audio is still playing, defer the transition until the queue is empty
+      if (isPlayingRef.current) {
+        pendingReadyRef.current = true;
+      } else {
+        isAgentSpeakingRef.current = false;
+        setState("listening");
+      }
       return;
     }
 
@@ -103,6 +112,9 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
   }, []);
 
   const stopAllAudio = useCallback(() => {
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    pendingReadyRef.current = false;
     activeSourcesRef.current.forEach((s) => {
       try {
         s.stop();
@@ -113,18 +125,42 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
     activeSourcesRef.current = [];
   }, []);
 
-  const playAudioChunk = useCallback(async (buffer: ArrayBuffer) => {
-    if (!audioContextRef.current) return;
-    const audioBuffer = await audioContextRef.current.decodeAudioData(buffer.slice(0));
+  const playNextInQueue = useCallback(() => {
+    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
+      isPlayingRef.current = false;
+      isAgentSpeakingRef.current = false;
+      // Backend already sent 'ready' while we were playing — now we can transition
+      if (pendingReadyRef.current) {
+        pendingReadyRef.current = false;
+        setState("listening");
+      }
+      return;
+    }
+
+    const audioBuffer = audioQueueRef.current.shift()!;
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioContextRef.current.destination);
+    activeSourcesRef.current.push(source);
     source.onended = () => {
       activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+      playNextInQueue();
     };
-    activeSourcesRef.current.push(source);
+    isPlayingRef.current = true;
     source.start();
   }, []);
+
+  const playAudioChunk = useCallback(
+    async (buffer: ArrayBuffer) => {
+      if (!audioContextRef.current) return;
+      const audioBuffer = await audioContextRef.current.decodeAudioData(buffer.slice(0));
+      audioQueueRef.current.push(audioBuffer);
+      if (!isPlayingRef.current) {
+        playNextInQueue();
+      }
+    },
+    [playNextInQueue],
+  );
 
   const startCall = useCallback(async () => {
     setError(null);
