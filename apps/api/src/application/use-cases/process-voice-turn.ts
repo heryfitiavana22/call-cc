@@ -1,8 +1,8 @@
 import type { Result } from "@call-cc/types";
 import { err, ok } from "@call-cc/types";
-import type { ISttProvider, ISttStream } from "@/domain/ports/i-stt-provider";
-import type { ITtsProvider } from "@/domain/ports/i-tts-provider";
-import type { ILlmProvider, LlmMessage } from "@/domain/ports/i-llm-provider";
+import type { SttProviderPort, SttStreamPort } from "@/domain/ports/stt-provider-port";
+import type { TtsProviderPort } from "@/domain/ports/tts-provider-port";
+import type { LlmProviderPort, LlmMessage } from "@/domain/ports/llm-provider-port";
 import type { VoiceSession } from "@/domain/entities/voice-session";
 import { logger } from "@/shared/logger";
 
@@ -39,15 +39,26 @@ const extractSentence = (buffer: string): [string, string] | null => {
  *   end(...)           → finalizes STT, then runs LLM → TTS pipeline
  *   abort()            → discards current stream (barge-in / disconnection)
  */
-export class ProcessVoiceTurn {
-  private stream: ISttStream | null = null;
+export interface ProcessVoiceTurnDeps {
+  stt: SttProviderPort;
+  llm: LlmProviderPort;
+  tts: TtsProviderPort;
+  systemPrompt?: string;
+}
 
-  constructor(
-    private readonly stt: ISttProvider,
-    private readonly llm: ILlmProvider,
-    private readonly tts: ITtsProvider,
-    private readonly systemPrompt = "",
-  ) {}
+export class ProcessVoiceTurn {
+  private stream: SttStreamPort | null = null;
+  private readonly stt: SttProviderPort;
+  private readonly llm: LlmProviderPort;
+  private readonly tts: TtsProviderPort;
+  private readonly systemPrompt: string;
+
+  constructor({ stt, llm, tts, systemPrompt = "" }: ProcessVoiceTurnDeps) {
+    this.stt = stt;
+    this.llm = llm;
+    this.tts = tts;
+    this.systemPrompt = systemPrompt;
+  }
 
   /** Open a new STT stream. Call once per utterance, before addChunk(). */
   begin(): void {

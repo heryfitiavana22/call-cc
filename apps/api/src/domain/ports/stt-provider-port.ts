@@ -6,7 +6,7 @@ import type { Transcript } from "@/domain/value-objects/transcript";
  * Audio chunks are pushed as they arrive; finalize() is called when the VAD
  * signals end-of-speech and returns the complete transcript.
  */
-export interface ISttStream {
+export interface SttStreamPort {
   /** Push a raw audio chunk (ArrayBuffer) while the user is speaking. */
   write(chunk: ArrayBuffer): void;
   /** Signal end-of-speech. Flushes the stream and resolves with the transcript. */
@@ -20,6 +20,6 @@ export interface ISttStream {
  * Each call to createStream() opens a new turn stream.
  * Providers can implement streaming (Deepgram live) or buffered (Groq Whisper).
  */
-export interface ISttProvider {
-  createStream(): ISttStream;
+export interface SttProviderPort {
+  createStream(): SttStreamPort;
 }

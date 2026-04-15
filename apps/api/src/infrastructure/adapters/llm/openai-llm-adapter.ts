@@ -1,11 +1,11 @@
 import { streamText, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
-import type { ILlmProvider, LlmMessage, LlmTool } from "@/domain/ports/i-llm-provider";
+import type { LlmProviderPort, LlmMessage, LlmTool } from "@/domain/ports/llm-provider-port";
 import type { ToolSet } from "ai";
 
 const DEFAULT_MODEL = "gpt-4o";
 
-export class OpenAILlmAdapter implements ILlmProvider {
+export class OpenAILlmAdapter implements LlmProviderPort {
   constructor(private readonly agentTools: ToolSet = {}) {}
 
   async *stream(

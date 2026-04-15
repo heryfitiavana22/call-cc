@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ok, err } from "@call-cc/types";
 import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
-import type { ISttProvider, ISttStream } from "@/domain/ports/i-stt-provider";
-import type { ITtsProvider } from "@/domain/ports/i-tts-provider";
-import type { ILlmProvider } from "@/domain/ports/i-llm-provider";
+import type { SttProviderPort, SttStreamPort } from "@/domain/ports/stt-provider-port";
+import type { TtsProviderPort } from "@/domain/ports/tts-provider-port";
+import type { LlmProviderPort } from "@/domain/ports/llm-provider-port";
 import { VoiceSession } from "@/domain/entities/voice-session";
 import { Transcript } from "@/domain/value-objects/transcript";
 
@@ -11,23 +11,23 @@ import { Transcript } from "@/domain/value-objects/transcript";
 // Mock helpers
 // ---------------------------------------------------------------------------
 
-const makeSttStream = (transcriptText = "Bonjour."): ISttStream => ({
+const makeSttStream = (transcriptText = "Bonjour."): SttStreamPort => ({
   write: vi.fn(),
   finalize: vi.fn().mockResolvedValue(ok(new Transcript(transcriptText))),
   abort: vi.fn(),
 });
 
-const makeFailSttStream = (error = new Error("STT failed")): ISttStream => ({
+const makeFailSttStream = (error = new Error("STT failed")): SttStreamPort => ({
   write: vi.fn(),
   finalize: vi.fn().mockResolvedValue(err(error)),
   abort: vi.fn(),
 });
 
-const makeStt = (stream: ISttStream = makeSttStream()): ISttProvider => ({
+const makeStt = (stream: SttStreamPort = makeSttStream()): SttProviderPort => ({
   createStream: vi.fn().mockReturnValue(stream),
 });
 
-const makeTts = (fail?: Error): ITtsProvider => ({
+const makeTts = (fail?: Error): TtsProviderPort => ({
   synthesize: vi.fn().mockImplementation(async () => {
     if (fail) return err(fail);
     return ok(new ArrayBuffer(8));
@@ -38,7 +38,7 @@ async function* tokenGenerator(tokens: string[]) {
   for (const t of tokens) yield t;
 }
 
-const makeLlm = (tokens = ["Salut", "!"], fail?: Error): ILlmProvider => ({
+const makeLlm = (tokens = ["Salut", "!"], fail?: Error): LlmProviderPort => ({
   stream: vi.fn().mockImplementation(async function* () {
     if (fail) throw fail;
     yield* tokenGenerator(tokens);
@@ -52,10 +52,10 @@ const makeSession = () => new VoiceSession("test-session");
 // ---------------------------------------------------------------------------
 
 describe("ProcessVoiceTurn", () => {
-  let sttStream: ISttStream;
-  let stt: ISttProvider;
-  let tts: ITtsProvider;
-  let llm: ILlmProvider;
+  let sttStream: SttStreamPort;
+  let stt: SttProviderPort;
+  let tts: TtsProviderPort;
+  let llm: LlmProviderPort;
   let voiceTurn: ProcessVoiceTurn;
   let session: VoiceSession;
 
@@ -64,7 +64,7 @@ describe("ProcessVoiceTurn", () => {
     stt = makeStt(sttStream);
     tts = makeTts();
     llm = makeLlm();
-    voiceTurn = new ProcessVoiceTurn(stt, llm, tts);
+    voiceTurn = new ProcessVoiceTurn({ stt, llm, tts });
     session = makeSession();
   });
 
@@ -116,7 +116,7 @@ describe("ProcessVoiceTurn", () => {
 
     it("calls onAudioChunk for each TTS sentence", async () => {
       llm = makeLlm(["Hello", " world."]);
-      voiceTurn = new ProcessVoiceTurn(makeStt(sttStream), llm, tts);
+      voiceTurn = new ProcessVoiceTurn({ stt: makeStt(sttStream), llm, tts });
       const onAudioChunk = vi.fn();
 
       voiceTurn.begin();
@@ -155,7 +155,7 @@ describe("ProcessVoiceTurn", () => {
   describe("end() — error paths", () => {
     it("returns err when STT finalize fails", async () => {
       const stream = makeFailSttStream(new Error("STT down"));
-      voiceTurn = new ProcessVoiceTurn(makeStt(stream), llm, tts);
+      voiceTurn = new ProcessVoiceTurn({ stt: makeStt(stream), llm, tts });
       voiceTurn.begin();
       const result = await voiceTurn.end(session, [], new AbortController().signal, {
         onTranscript: vi.fn(),
@@ -166,7 +166,7 @@ describe("ProcessVoiceTurn", () => {
 
     it("returns ok({transcript:'',agentReply:''}) for empty transcript", async () => {
       const stream = makeSttStream(""); // empty transcript
-      voiceTurn = new ProcessVoiceTurn(makeStt(stream), llm, tts);
+      voiceTurn = new ProcessVoiceTurn({ stt: makeStt(stream), llm, tts });
       voiceTurn.begin();
       const result = await voiceTurn.end(session, [], new AbortController().signal, {
         onTranscript: vi.fn(),
@@ -179,7 +179,7 @@ describe("ProcessVoiceTurn", () => {
 
     it("returns err when LLM stream throws", async () => {
       llm = makeLlm([], new Error("LLM down"));
-      voiceTurn = new ProcessVoiceTurn(makeStt(sttStream), llm, tts);
+      voiceTurn = new ProcessVoiceTurn({ stt: makeStt(sttStream), llm, tts });
       voiceTurn.begin();
       const result = await voiceTurn.end(session, [], new AbortController().signal, {
         onTranscript: vi.fn(),
@@ -190,7 +190,7 @@ describe("ProcessVoiceTurn", () => {
 
     it("returns err when TTS synthesize fails", async () => {
       tts = makeTts(new Error("TTS down"));
-      voiceTurn = new ProcessVoiceTurn(makeStt(sttStream), llm, tts);
+      voiceTurn = new ProcessVoiceTurn({ stt: makeStt(sttStream), llm, tts });
       voiceTurn.begin();
       const result = await voiceTurn.end(session, [], new AbortController().signal, {
         onTranscript: vi.fn(),

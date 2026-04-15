@@ -1,18 +1,23 @@
+import { TOOL_KEYS } from "./tool-keys";
+
 export type EnabledTools = {
   webSearch?: boolean;
   calendar?: boolean;
   contacts?: boolean;
 };
 
+export interface BuildSystemPromptOptions {
+  language: string;
+  tools?: EnabledTools;
+}
+
 /**
  * Builds the system prompt for the voice agent.
- *
- * @param language  - BCP-47 language code (e.g. "fr", "en").
- * @param tools     - Which tool capabilities are active. Only active tools are
- *   described in the prompt — avoids confusing the LLM about tools that don't
- *   exist for this session.
+ * Only describes tools that are enabled — avoids confusing the LLM about
+ * capabilities that don't exist for this session.
+ * Tool section headers use TOOL_KEYS so renaming a tool stays in sync.
  */
-export const buildSystemPrompt = (language: string, tools: EnabledTools = {}): string => {
+export const buildSystemPrompt = ({ language, tools = {} }: BuildSystemPromptOptions): string => {
   const toolSection = buildToolSection(tools);
 
   return `\
@@ -39,24 +44,24 @@ const buildToolSection = (tools: EnabledTools): string => {
 
   if (tools.webSearch) {
     entries.push(`\
-### web_search
+### ${TOOL_KEYS.webSearch}
 Search the internet for up-to-date information (news, weather, prices, facts, etc.).
 Before calling this tool, say a short sentence aloud so the user knows you are searching.`);
   }
 
   if (tools.calendar) {
     entries.push(`\
-### calendar_create_event
+### ${TOOL_KEYS.calendarCreate}
 Create a calendar event for the user (title, date, time, optional duration).
 Confirm the details aloud before creating.
 
-### calendar_list_events
+### ${TOOL_KEYS.calendarList}
 List the user's upcoming events for a given day.`);
   }
 
   if (tools.contacts) {
     entries.push(`\
-### contacts_lookup
+### ${TOOL_KEYS.contactsLookup}
 Look up a contact by name in the user's address book (phone, email, etc.).`);
   }
 

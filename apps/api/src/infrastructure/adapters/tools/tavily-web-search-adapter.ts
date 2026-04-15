@@ -1,7 +1,7 @@
 import { tavily } from "@tavily/core";
-import type { IWebSearch, WebSearchResult } from "@/domain/ports/i-web-search";
+import type { WebSearchPort, WebSearchResult } from "@/domain/ports/web-search-port";
 
-export class TavilyWebSearchAdapter implements IWebSearch {
+export class TavilyWebSearchAdapter implements WebSearchPort {
   private readonly client: ReturnType<typeof tavily>;
 
   constructor(apiKey: string) {

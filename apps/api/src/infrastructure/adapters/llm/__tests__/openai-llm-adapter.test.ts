@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { OpenAILlmAdapter } from "@/infrastructure/adapters/llm/openai-llm-adapter";
-import type { LlmMessage } from "@/domain/ports/i-llm-provider";
+import type { LlmMessage } from "@/domain/ports/llm-provider-port";
 import { env } from "@/config/env";
 
 const hasRealKey = env.OPENAI_API_KEY !== "test-key";

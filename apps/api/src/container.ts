@@ -38,7 +38,7 @@ const buildContainer = () => {
     contacts: true,
   };
 
-  const systemPrompt = buildSystemPrompt(env.AGENT_LANGUAGE, enabledTools);
+  const systemPrompt = buildSystemPrompt({ language: env.AGENT_LANGUAGE, tools: enabledTools });
   const agentTools = buildAgentTools(toolAdapters);
   const llm = new OpenAILlmAdapter(agentTools);
 
@@ -47,7 +47,7 @@ const buildContainer = () => {
   const endVoiceSession = new EndVoiceSession();
 
   // Factory — creates a fresh ProcessVoiceTurn per WebSocket connection
-  const createProcessVoiceTurn = () => new ProcessVoiceTurn(stt, llm, tts, systemPrompt);
+  const createProcessVoiceTurn = () => new ProcessVoiceTurn({ stt, llm, tts, systemPrompt });
 
   return {
     startVoiceSession,

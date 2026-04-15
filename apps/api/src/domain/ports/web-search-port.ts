@@ -4,6 +4,6 @@ export interface WebSearchResult {
   content: string;
 }
 
-export interface IWebSearch {
+export interface WebSearchPort {
   search(query: string): Promise<WebSearchResult[]>;
 }

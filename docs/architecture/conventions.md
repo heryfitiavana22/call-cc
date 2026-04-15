@@ -9,22 +9,51 @@ voice-session.ts
 deepgram-stt-adapter.ts
 process-audio-chunk.ts
 audio-stream-handler.ts
-i-stt-provider.ts
+stt-provider-port.ts       # ports use the -port suffix
 use-voice-call.ts
 ```
 
 ## TypeScript Naming
 
-| Element             | Convention                | Example              |
-| ------------------- | ------------------------- | -------------------- |
-| Files               | `kebab-case`              | `voice-session.ts`   |
-| Classes             | `PascalCase`              | `VoiceSession`       |
-| Interfaces          | `PascalCase` + `I` prefix | `ISttProvider`       |
-| Types               | `PascalCase`              | `AudioChunk`         |
-| Functions / methods | `camelCase`               | `transcribeAudio()`  |
-| Variables           | `camelCase`               | `audioChunk`         |
-| Constants           | `UPPER_SNAKE_CASE`        | `MAX_CHUNK_SIZE`     |
-| Folders             | `kebab-case`              | `use-cases/`, `stt/` |
+| Element             | Convention                   | Example              |
+| ------------------- | ---------------------------- | -------------------- |
+| Files               | `kebab-case`                 | `voice-session.ts`   |
+| Classes             | `PascalCase`                 | `VoiceSession`       |
+| Port interfaces     | `PascalCase` + `Port` suffix | `SttProviderPort`    |
+| Other interfaces    | `PascalCase`                 | `AudioChunk`         |
+| Types               | `PascalCase`                 | `AudioChunk`         |
+| Functions / methods | `camelCase`                  | `transcribeAudio()`  |
+| Variables           | `camelCase`                  | `audioChunk`         |
+| Constants           | `UPPER_SNAKE_CASE`           | `MAX_CHUNK_SIZE`     |
+| Folders             | `kebab-case`                 | `use-cases/`, `stt/` |
+
+## Port File Naming
+
+Port files live in `domain/ports/` and use the `{concern}-port.ts` suffix:
+
+```
+stt-provider-port.ts   → SttProviderPort, SttStreamPort
+tts-provider-port.ts   → TtsProviderPort
+llm-provider-port.ts   → LlmProviderPort, LlmMessage, LlmTool
+web-search-port.ts     → WebSearchPort, WebSearchResult
+calendar-port.ts       → CalendarPort, CalendarEvent
+contacts-port.ts       → ContactsPort, Contact
+```
+
+## Function / Constructor Parameters
+
+When a function or constructor has 3 or more parameters, or when any parameter is optional,
+prefer a single options object over positional parameters:
+
+```ts
+// ❌ avoid
+new ProcessVoiceTurn(stt, llm, tts, systemPrompt);
+buildSystemPrompt(language, tools);
+
+// ✅ prefer
+new ProcessVoiceTurn({ stt, llm, tts, systemPrompt });
+buildSystemPrompt({ language, tools });
+```
 
 ## Adapter Naming
 
@@ -36,13 +65,13 @@ use-voice-call.ts
 
 ## SOLID
 
-| Principle                     | Concrete application                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
-| **S** — Single Responsibility | One use case = one action. One adapter = one provider.                                |
-| **O** — Open/Closed           | Adding a provider = new adapter, no modification of existing code                     |
-| **L** — Liskov Substitution   | All STT adapters are interchangeable via `ISttProvider`                               |
-| **I** — Interface Segregation | `ISttProvider`, `ITtsProvider`, `ILlmProvider` are separate — no single fat interface |
-| **D** — Dependency Inversion  | Use cases depend on ports (interfaces), never on adapters directly                    |
+| Principle                     | Concrete application                                                                           |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| **S** — Single Responsibility | One use case = one action. One adapter = one provider.                                         |
+| **O** — Open/Closed           | Adding a provider = new adapter, no modification of existing code                              |
+| **L** — Liskov Substitution   | All STT adapters are interchangeable via `SttProviderPort`                                     |
+| **I** — Interface Segregation | `SttProviderPort`, `TtsProviderPort`, `LlmProviderPort` are separate — no single fat interface |
+| **D** — Dependency Inversion  | Use cases depend on ports (interfaces), never on adapters directly                             |
 
 ## Clean Code
 

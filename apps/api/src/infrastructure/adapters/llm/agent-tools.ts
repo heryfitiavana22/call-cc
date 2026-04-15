@@ -1,26 +1,28 @@
 import { tool, jsonSchema } from "ai";
 import type { ToolSet } from "ai";
-import type { IWebSearch } from "@/domain/ports/i-web-search";
-import type { ICalendar } from "@/domain/ports/i-calendar";
-import type { IContacts } from "@/domain/ports/i-contacts";
+import type { WebSearchPort } from "@/domain/ports/web-search-port";
+import type { CalendarPort } from "@/domain/ports/calendar-port";
+import type { ContactsPort } from "@/domain/ports/contacts-port";
+import { TOOL_KEYS } from "@/config/tool-keys";
 
 export interface ToolAdapters {
-  webSearch?: IWebSearch;
-  calendar?: ICalendar;
-  contacts?: IContacts;
+  webSearch?: WebSearchPort;
+  calendar?: CalendarPort;
+  contacts?: ContactsPort;
 }
 
 /**
  * Builds the AI SDK ToolSet from the provided adapters.
  * Only tools whose adapter is present are included — if an adapter is absent
  * the tool is simply omitted (and should also be absent from the system prompt).
+ * Tool key names come from TOOL_KEYS — change them there to keep prompt + SDK in sync.
  */
 export const buildAgentTools = (adapters: ToolAdapters): ToolSet => {
   const tools: Record<string, unknown> = {};
 
   if (adapters.webSearch) {
     const webSearch = adapters.webSearch;
-    tools.web_search = tool({
+    tools[TOOL_KEYS.webSearch] = tool({
       description:
         "Search the internet for up-to-date information: news, weather, prices, facts, etc.",
       inputSchema: jsonSchema<{ query: string }>({
@@ -39,7 +41,7 @@ export const buildAgentTools = (adapters: ToolAdapters): ToolSet => {
 
   if (adapters.calendar) {
     const calendar = adapters.calendar;
-    tools.calendar_create_event = tool({
+    tools[TOOL_KEYS.calendarCreate] = tool({
       description: "Create a calendar event for the user.",
       inputSchema: jsonSchema<{
         title: string;
@@ -64,7 +66,7 @@ export const buildAgentTools = (adapters: ToolAdapters): ToolSet => {
       }) => calendar.createEvent(args),
     });
 
-    tools.calendar_list_events = tool({
+    tools[TOOL_KEYS.calendarList] = tool({
       description: "List the user's calendar events for a given date.",
       inputSchema: jsonSchema<{ date: string }>({
         type: "object",
@@ -79,7 +81,7 @@ export const buildAgentTools = (adapters: ToolAdapters): ToolSet => {
 
   if (adapters.contacts) {
     const contacts = adapters.contacts;
-    tools.contacts_lookup = tool({
+    tools[TOOL_KEYS.contactsLookup] = tool({
       description: "Look up a contact by name in the user's address book.",
       inputSchema: jsonSchema<{ name: string }>({
         type: "object",

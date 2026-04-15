@@ -1,7 +1,7 @@
 import { DeepgramClient, type Deepgram } from "@deepgram/sdk";
 import type { Result } from "@call-cc/types";
 import { ok, err } from "@call-cc/types";
-import type { ISttProvider, ISttStream } from "@/domain/ports/i-stt-provider";
+import type { SttProviderPort, SttStreamPort } from "@/domain/ports/stt-provider-port";
 import { Transcript } from "@/domain/value-objects/transcript";
 import { env } from "@/config/env";
 
@@ -17,10 +17,10 @@ const isWav = (buf: ArrayBuffer): boolean => {
  *
  * Audio chunks are accumulated locally; finalize() sends the merged buffer
  * as a single transcribeFile() request — the same proven approach as the
- * original one-shot adapter, wrapped in the ISttStream interface so the
+ * original one-shot adapter, wrapped in the SttStreamPort interface so the
  * adapter can be swapped for a true live-streaming implementation later.
  */
-class DeepgramSttStream implements ISttStream {
+class DeepgramSttStream implements SttStreamPort {
   private chunks: ArrayBuffer[] = [];
   private aborted = false;
 
@@ -80,14 +80,14 @@ class DeepgramSttStream implements ISttStream {
   }
 }
 
-export class DeepgramSttAdapter implements ISttProvider {
+export class DeepgramSttAdapter implements SttProviderPort {
   private readonly client: DeepgramClient;
 
   constructor() {
     this.client = new DeepgramClient({ apiKey: env.DEEPGRAM_API_KEY });
   }
 
-  createStream(): ISttStream {
+  createStream(): SttStreamPort {
     return new DeepgramSttStream(this.client, env.AGENT_LANGUAGE ?? env.AGENT_LANGUAGE);
   }
 }

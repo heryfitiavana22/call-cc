@@ -1,13 +1,13 @@
 import OpenAI from "openai";
 import type { Result } from "@call-cc/types";
 import { ok, err } from "@call-cc/types";
-import type { ITtsProvider } from "@/domain/ports/i-tts-provider";
+import type { TtsProviderPort } from "@/domain/ports/tts-provider-port";
 import { env } from "@/config/env";
 
 const DEFAULT_MODEL = "tts-1";
 const DEFAULT_VOICE = "alloy";
 
-export class OpenAITtsAdapter implements ITtsProvider {
+export class OpenAITtsAdapter implements TtsProviderPort {
   private readonly client: OpenAI;
 
   constructor() {

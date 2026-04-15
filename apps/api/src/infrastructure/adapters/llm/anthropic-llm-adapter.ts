@@ -1,6 +1,6 @@
-import type { ILlmProvider, LlmMessage, LlmTool } from "@/domain/ports/i-llm-provider";
+import type { LlmProviderPort, LlmMessage, LlmTool } from "@/domain/ports/llm-provider-port";
 
-export class AnthropicLlmAdapter implements ILlmProvider {
+export class AnthropicLlmAdapter implements LlmProviderPort {
   // eslint-disable-next-line @typescript-eslint/require-await
   async *stream(
     _messages: LlmMessage[],

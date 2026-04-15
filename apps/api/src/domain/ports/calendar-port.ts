@@ -5,7 +5,7 @@ export interface CalendarEvent {
   duration_minutes?: number;
 }
 
-export interface ICalendar {
+export interface CalendarPort {
   createEvent(event: CalendarEvent): Promise<{ success: boolean; message: string }>;
   listEvents(date: string): Promise<{ events: CalendarEvent[]; message: string }>;
 }

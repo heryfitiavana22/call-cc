@@ -1,7 +1,7 @@
 import Groq from "groq-sdk";
 import type { Result } from "@call-cc/types";
 import { ok, err } from "@call-cc/types";
-import type { ISttProvider, ISttStream } from "@/domain/ports/i-stt-provider";
+import type { SttProviderPort, SttStreamPort } from "@/domain/ports/stt-provider-port";
 import { Transcript } from "@/domain/value-objects/transcript";
 import { env } from "@/config/env";
 
@@ -13,7 +13,7 @@ import { env } from "@/config/env";
  * - Groq inference is very fast (~10–50ms for short utterances) so the latency
  *   difference vs streaming is negligible for typical voice turns.
  */
-class GroqSttStream implements ISttStream {
+class GroqSttStream implements SttStreamPort {
   private chunks: Buffer[] = [];
   private aborted = false;
 
@@ -58,7 +58,7 @@ class GroqSttStream implements ISttStream {
   }
 }
 
-export class GroqSttAdapter implements ISttProvider {
+export class GroqSttAdapter implements SttProviderPort {
   private readonly client: Groq;
   private readonly language: string;
 
@@ -67,7 +67,7 @@ export class GroqSttAdapter implements ISttProvider {
     this.language = env.AGENT_LANGUAGE;
   }
 
-  createStream(): ISttStream {
+  createStream(): SttStreamPort {
     return new GroqSttStream(this.client, this.language);
   }
 }

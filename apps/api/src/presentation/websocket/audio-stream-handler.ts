@@ -5,7 +5,7 @@ import type { ProcessVoiceTurn } from "@/application/use-cases/process-voice-tur
 import type { StartVoiceSession } from "@/application/use-cases/start-voice-session";
 import type { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 import type { VoiceSession } from "@/domain/entities/voice-session";
-import type { LlmMessage } from "@/domain/ports/i-llm-provider";
+import type { LlmMessage } from "@/domain/ports/llm-provider-port";
 import { logger } from "@/shared/logger";
 
 const SESSION_ID_LENGTH = 8;

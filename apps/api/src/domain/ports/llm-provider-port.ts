@@ -9,7 +9,7 @@ export interface LlmMessage {
   content: string;
 }
 
-export interface ILlmProvider {
+export interface LlmProviderPort {
   /**
    * Streams the LLM response token by token.
    * The consumer is responsible for assembling the full text if needed.

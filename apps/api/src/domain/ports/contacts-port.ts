@@ -4,6 +4,6 @@ export interface Contact {
   email?: string;
 }
 
-export interface IContacts {
+export interface ContactsPort {
   lookup(name: string): Promise<{ contact: Contact | null; message: string }>;
 }
