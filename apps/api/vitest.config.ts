@@ -5,14 +5,14 @@ export default defineConfig({
   test: {
     globals: false,
     environment: "node",
-    // Provide stub values so env.ts validation passes in tests.
-    // Real providers are never called in unit tests — all ports are mocked.
+    // Pass real keys through when available (integration tests loaded via --env-file).
+    // Fall back to stubs so env.ts validation passes in unit test runs.
     env: {
       NODE_ENV: "test",
-      OPENAI_API_KEY: "test-key",
-      DEEPGRAM_API_KEY: "test-key",
-      DEEPGRAM_LANGUAGE: "fr",
-      LOG_LEVEL: "error",
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "test-key",
+      DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY ?? "test-key",
+      DEEPGRAM_LANGUAGE: process.env.DEEPGRAM_LANGUAGE ?? "fr",
+      LOG_LEVEL: "fatal",
     },
   },
   resolve: {

@@ -8,7 +8,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "tsx --env-file=.env node_modules/vitest/vitest.mjs run --reporter=verbose src/infrastructure"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.53",
