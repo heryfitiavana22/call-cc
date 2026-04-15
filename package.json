@@ -23,11 +23,7 @@
     "@commitlint/config-conventional": "^19.8.0"
   },
   "lint-staged": {
-    "**/*.{ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "**/*.{js,json,md}": [
+    "**/*.{ts,tsx,js,json,md}": [
       "prettier --write"
     ]
   }
