@@ -5,15 +5,14 @@ import { ok, err } from "@call-cc/types";
 import type { TtsProviderPort } from "@/domain/ports/tts-provider-port";
 
 /**
- * eleven_flash_v2_5 — ultra-low latency (~75ms), 32 languages including French.
- * Switch to eleven_multilingual_v2 for higher quality at the cost of latency.
+ * eleven_v3 — most expressive model, supports inline audio tags ([laughs], [whispers], etc.).
+ * Higher latency than Flash v2.5 but required for audio tag support.
  */
-const MODEL = "eleven_flash_v2_5";
+const MODEL = "eleven_v3"; // eleven_flash_v2_5 ; eleven_v3
 
 export interface ElevenLabsTtsAdapterOptions {
   voiceId: string;
 }
-
 export class ElevenLabsTtsAdapter implements TtsProviderPort {
   private readonly client: ElevenLabsClient;
   private readonly voiceId: string;

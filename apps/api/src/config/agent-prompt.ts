@@ -6,25 +6,28 @@ export type EnabledTools = {
   contacts?: boolean;
 };
 
+/**
+ * Controls which intonation guidance section is injected into the system prompt.
+ *
+ * - "none"        → no section (OpenAI: prosody is handled via AGENT_TTS_INSTRUCTIONS)
+ * - "inline-tags" → ElevenLabs v3 audio tags embedded in the LLM text ([laughs], [sighs]…)
+ * - "ssml-tags"   → Cartesia sonic-3 SSML tags embedded in the LLM text (<speed/>, <emotion/>…)
+ */
+export type ProsodyMode = "none" | "inline-tags" | "ssml-tags";
+
 export interface BuildSystemPromptOptions {
   language: string;
   tools?: EnabledTools;
-  /**
-   * When true, instructs the LLM to embed inline audio tags ([laughs], [sighs], etc.)
-   * directly in its replies to guide TTS delivery.
-   * Only enable when the TTS provider supports inline tags — other providers would
-   * speak them aloud literally.
-   */
-  inlineAudioTags?: boolean;
+  prosodyMode?: ProsodyMode;
 }
 
 /** Agent identity — change here to rename or repersonalise. */
 export const AGENT_NAME = "Léa";
 
 /**
- * TTS prosody instructions passed to gpt-4o-mini-tts.
+ * TTS prosody instructions passed to gpt-4o-mini-tts (OpenAI provider only).
  * Describes how Léa should sound — tone, pace, and emotional range.
- * Keep in sync with the identity section of the system prompt above.
+ * Not used by Cartesia or ElevenLabs.
  */
 export const AGENT_TTS_INSTRUCTIONS = `\
 You are Léa, a warm and naturally expressive French voice assistant.
@@ -48,10 +51,10 @@ Guidelines:
 export const buildSystemPrompt = ({
   language,
   tools = {},
-  inlineAudioTags = false,
+  prosodyMode = "none",
 }: BuildSystemPromptOptions): string => {
   const toolSection = buildToolSection(tools);
-  const audioTagSection = inlineAudioTags ? ELEVENLABS_AUDIO_TAG_SECTION : "";
+  const prosodySection = PROSODY_SECTIONS[prosodyMode];
 
   return `\
 You are ${AGENT_NAME}. You speak — you do not write.
@@ -82,37 +85,79 @@ If the user switches language mid-conversation, follow them immediately.
 - No markdown, no lists, no bullet points, no code blocks — ever.
 - Spell out numbers and abbreviations so they sound natural aloud.
 - If you don't know something and no tool can help, say so simply. Never invent facts.
-${audioTagSection}${toolSection}`;
+${prosodySection}${toolSection}`;
 };
 
+// ---------------------------------------------------------------------------
+// Prosody sections — one per mode, injected only when active
+// ---------------------------------------------------------------------------
+
 /**
- * ElevenLabs audio tag instructions — appended to the system prompt only when
- * TTS_PROVIDER=elevenlabs. Tags are interpreted by the ElevenLabs synthesis engine
- * to shape delivery; they do not appear as spoken words.
+ * ElevenLabs eleven_v3 — inline audio tags written by the LLM directly in its text.
+ * The TTS engine interprets them and removes them from the spoken output.
  *
- * Supported tags: [laughs] [chuckles] [sighs] [whispers] [clears throat]
- *                 [excited] [sad] [angry] [surprised] [nervous]
+ * Full tag library: 1450+ tags across emotions, delivery, reactions, narrative, accents.
+ * Here we expose the subset most useful for a warm, conversational French assistant.
  */
-const ELEVENLABS_AUDIO_TAG_SECTION = `
-## Voice expression tags
-You may embed audio tags in your replies to shape how your voice sounds.
-Place them inline, directly before the word or phrase they apply to.
-Use them sparingly — only when they genuinely add emotional truth.
+const INLINE_TAGS_SECTION = `
+## Voice expression
+You may embed audio tags directly in your replies to shape how you sound.
+Place the tag immediately before the word or phrase it should affect.
+Use them sparingly — only when they add genuine emotional truth, not decoration.
 
-Available tags and when to use them:
-- [laughter] — genuine amusement, not politeness
-- [chuckles] — soft, warm laugh for light moments
-- [sighs] — mild exasperation, relief, or hesitation
-- [whispers] — intimacy, a secret, or a conspiratorial aside
-- [excited] — real enthusiasm, good news, a discovery
-- [sad] — empathy on a difficult topic
-- [nervous] — uncertainty, a tricky question
-- [surprised] — genuine unexpected news
+Available tags:
+- [laughs]         — genuine amusement (not polite)
+- [chuckles]       — soft, warm laugh for light moments
+- [sighs]          — hesitation, mild exasperation, or relief
+- [whispers]       — intimacy, a secret, a conspiratorial aside
+- [excited]        — real enthusiasm, a discovery, good news
+- [sad]            — empathy on a difficult or heavy topic
+- [nervous]        — uncertainty, a tricky or delicate question
+- [hesitates]      — searching for words, genuine uncertainty
+- [dramatic pause] — emphasis before something important
 
-Example: "Oh là là, [laughs] c'est vraiment trop drôle."
-Do not stack multiple tags. Do not use tags on every sentence.
+Example: "Oh là là, [laughs] c'est vraiment trop drôle !"
+Example: "[hesitates] Eh bien… c'est une bonne question."
+Do not stack multiple tags. Do not use a tag on every sentence.
 
 `;
+
+/**
+ * Cartesia sonic-3 — SSML-like tags written by the LLM inline in the transcript.
+ * The TTS engine interprets them before synthesis.
+ *
+ * Speed: 0.6 (slow) → 1.5 (fast), default 1.0
+ * Volume: 0.5 (quiet) → 2.0 (loud), default 1.0
+ * Emotion: experimental — works best on voices tagged "Emotive"
+ * Break: pause in seconds (s) or milliseconds (ms)
+ */
+const SSML_TAGS_SECTION = `
+## Voice expression
+You may embed SSML tags directly in your replies to shape how you sound.
+Place the tag immediately before the text it should affect.
+Use them sparingly — only when they add genuine expressiveness.
+
+Available tags:
+- Speed:   <speed ratio="0.8"/>   slow down  |  <speed ratio="1.3"/>  speed up  (0.6–1.5)
+- Volume:  <volume ratio="0.6"/>  quieter    |  <volume ratio="1.5"/>  louder    (0.5–2.0)
+- Emotion: <emotion value="excited"/>  excited, sad, angry, calm  (experimental)
+- Pause:   <break time="0.5s"/>   natural pause (e.g. 0.3s, 1s)
+
+Example: "<emotion value="excited"/> Excellente nouvelle !"
+Example: "<speed ratio="0.8"/> Prenez bien note. <break time="0.5s"/> C'est important."
+Do not combine multiple tags on the same phrase.
+
+`;
+
+const PROSODY_SECTIONS: Record<ProsodyMode, string> = {
+  none: "",
+  "inline-tags": INLINE_TAGS_SECTION,
+  "ssml-tags": SSML_TAGS_SECTION,
+};
+
+// ---------------------------------------------------------------------------
+// Tool section
+// ---------------------------------------------------------------------------
 
 const buildToolSection = (tools: EnabledTools): string => {
   const entries: string[] = [];

@@ -7,7 +7,7 @@ import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
 import { GroqSttAdapter } from "./infrastructure/adapters/stt/groq-stt-adapter";
 // import { DeepgramSttAdapter } from "./infrastructure/adapters/stt/deepgram-stt-adapter";
-import { buildSystemPrompt, AGENT_TTS_INSTRUCTIONS } from "./config/agent-prompt";
+import { buildSystemPrompt, AGENT_TTS_INSTRUCTIONS, type ProsodyMode } from "./config/agent-prompt";
 import { buildAgentTools, type ToolAdapters } from "./infrastructure/adapters/llm/agent-tools";
 import { TavilyWebSearchAdapter } from "./infrastructure/adapters/tools/tavily-web-search-adapter";
 import { FakeCalendarAdapter } from "./infrastructure/adapters/tools/fake-calendar-adapter";
@@ -48,7 +48,6 @@ const buildContainer = () => {
   const stt = new GroqSttAdapter();
   // const stt = new DeepgramSttAdapter();
   const tts = buildTts();
-  console.log("tts", tts);
 
   // Tool adapters — conditionally enabled by env vars
   const toolAdapters: ToolAdapters = {
@@ -63,11 +62,19 @@ const buildContainer = () => {
     contacts: true,
   };
 
+  const prosodyMode: ProsodyMode =
+    env.TTS_PROVIDER === "elevenlabs"
+      ? "inline-tags"
+      : env.TTS_PROVIDER === "cartesia"
+        ? "ssml-tags"
+        : "none";
+
   const systemPrompt = buildSystemPrompt({
     language: env.AGENT_LANGUAGE,
     tools: enabledTools,
-    inlineAudioTags: env.TTS_PROVIDER === "cartesia",
+    prosodyMode,
   });
+
   const agentTools = buildAgentTools(toolAdapters);
   const llm = new OpenAILlmAdapter(agentTools);
 
