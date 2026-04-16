@@ -9,6 +9,13 @@ export type EnabledTools = {
 export interface BuildSystemPromptOptions {
   language: string;
   tools?: EnabledTools;
+  /**
+   * When true, instructs the LLM to embed inline audio tags ([laughs], [sighs], etc.)
+   * directly in its replies to guide TTS delivery.
+   * Only enable when the TTS provider supports inline tags — other providers would
+   * speak them aloud literally.
+   */
+  inlineAudioTags?: boolean;
 }
 
 /** Agent identity — change here to rename or repersonalise. */
@@ -38,8 +45,13 @@ Guidelines:
  * capabilities that don't exist for this session.
  * Tool section headers use TOOL_KEYS so renaming a tool stays in sync.
  */
-export const buildSystemPrompt = ({ language, tools = {} }: BuildSystemPromptOptions): string => {
+export const buildSystemPrompt = ({
+  language,
+  tools = {},
+  inlineAudioTags = false,
+}: BuildSystemPromptOptions): string => {
   const toolSection = buildToolSection(tools);
+  const audioTagSection = inlineAudioTags ? ELEVENLABS_AUDIO_TAG_SECTION : "";
 
   return `\
 You are ${AGENT_NAME}. You speak — you do not write.
@@ -70,8 +82,37 @@ If the user switches language mid-conversation, follow them immediately.
 - No markdown, no lists, no bullet points, no code blocks — ever.
 - Spell out numbers and abbreviations so they sound natural aloud.
 - If you don't know something and no tool can help, say so simply. Never invent facts.
-${toolSection}`;
+${audioTagSection}${toolSection}`;
 };
+
+/**
+ * ElevenLabs audio tag instructions — appended to the system prompt only when
+ * TTS_PROVIDER=elevenlabs. Tags are interpreted by the ElevenLabs synthesis engine
+ * to shape delivery; they do not appear as spoken words.
+ *
+ * Supported tags: [laughs] [chuckles] [sighs] [whispers] [clears throat]
+ *                 [excited] [sad] [angry] [surprised] [nervous]
+ */
+const ELEVENLABS_AUDIO_TAG_SECTION = `
+## Voice expression tags
+You may embed audio tags in your replies to shape how your voice sounds.
+Place them inline, directly before the word or phrase they apply to.
+Use them sparingly — only when they genuinely add emotional truth.
+
+Available tags and when to use them:
+- [laughter] — genuine amusement, not politeness
+- [chuckles] — soft, warm laugh for light moments
+- [sighs] — mild exasperation, relief, or hesitation
+- [whispers] — intimacy, a secret, or a conspiratorial aside
+- [excited] — real enthusiasm, good news, a discovery
+- [sad] — empathy on a difficult topic
+- [nervous] — uncertainty, a tricky question
+- [surprised] — genuine unexpected news
+
+Example: "Oh là là, [laughs] c'est vraiment trop drôle."
+Do not stack multiple tags. Do not use tags on every sentence.
+
+`;
 
 const buildToolSection = (tools: EnabledTools): string => {
   const entries: string[] = [];

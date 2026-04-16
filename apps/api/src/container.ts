@@ -1,4 +1,6 @@
 import { OpenAITtsAdapter } from "@/infrastructure/adapters/tts/openai-tts-adapter";
+import { CartesiaTtsAdapter } from "@/infrastructure/adapters/tts/cartesia-tts-adapter";
+import { ElevenLabsTtsAdapter } from "@/infrastructure/adapters/tts/elevenlabs-tts-adapter";
 import { OpenAILlmAdapter } from "@/infrastructure/adapters/llm/openai-llm-adapter";
 import { StartVoiceSession } from "@/application/use-cases/start-voice-session";
 import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
@@ -10,11 +12,33 @@ import { buildAgentTools, type ToolAdapters } from "./infrastructure/adapters/ll
 import { TavilyWebSearchAdapter } from "./infrastructure/adapters/tools/tavily-web-search-adapter";
 import { FakeCalendarAdapter } from "./infrastructure/adapters/tools/fake-calendar-adapter";
 import { FakeContactsAdapter } from "./infrastructure/adapters/tools/fake-contacts-adapter";
+import type { TtsProviderPort } from "./domain/ports/tts-provider-port";
 import { env } from "./config/env";
 
 /**
+ * Builds the TTS adapter based on the TTS_PROVIDER env var.
+ * env.ts superRefine already guarantees the matching API key + voice ID are set.
+ */
+const buildTts = (): TtsProviderPort => {
+  switch (env.TTS_PROVIDER) {
+    case "cartesia":
+      return new CartesiaTtsAdapter(env.CARTESIA_API_KEY as string, {
+        voiceId: env.CARTESIA_VOICE_ID as string,
+        language: env.AGENT_LANGUAGE,
+      });
+    case "elevenlabs":
+      return new ElevenLabsTtsAdapter(env.ELEVENLABS_API_KEY as string, {
+        voiceId: env.ELEVENLABS_VOICE_ID as string,
+      });
+    case "openai":
+    default:
+      return new OpenAITtsAdapter({ instructions: AGENT_TTS_INSTRUCTIONS });
+  }
+};
+
+/**
  * Dependency container — instantiates and injects adapters into use cases.
- * To swap a provider: replace the adapter here only, nothing else changes.
+ * To swap a provider: set TTS_PROVIDER (and matching keys) in .env, nothing else changes.
  *
  * Tool adapters are only instantiated when their env key is present.
  * The system prompt and ToolSet are built accordingly — no key = no tool.
@@ -23,7 +47,8 @@ const buildContainer = () => {
   // STT — swap here to change implementation
   const stt = new GroqSttAdapter();
   // const stt = new DeepgramSttAdapter();
-  const tts = new OpenAITtsAdapter({ instructions: AGENT_TTS_INSTRUCTIONS });
+  const tts = buildTts();
+  console.log("tts", tts);
 
   // Tool adapters — conditionally enabled by env vars
   const toolAdapters: ToolAdapters = {
@@ -38,7 +63,11 @@ const buildContainer = () => {
     contacts: true,
   };
 
-  const systemPrompt = buildSystemPrompt({ language: env.AGENT_LANGUAGE, tools: enabledTools });
+  const systemPrompt = buildSystemPrompt({
+    language: env.AGENT_LANGUAGE,
+    tools: enabledTools,
+    inlineAudioTags: env.TTS_PROVIDER === "cartesia",
+  });
   const agentTools = buildAgentTools(toolAdapters);
   const llm = new OpenAILlmAdapter(agentTools);
 
