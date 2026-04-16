@@ -142,10 +142,14 @@ Available tags:
 - Volume:  <volume ratio="0.6"/>  quieter    |  <volume ratio="1.5"/>  louder    (0.5–2.0)
 - Emotion: <emotion value="excited"/>  excited, sad, angry, calm  (experimental)
 - Pause:   <break time="0.5s"/>   natural pause (e.g. 0.3s, 1s)
+- Spell:   To spell out input text, you can wrap it in <spell> tags.
 
 Example: "<emotion value="excited"/> Excellente nouvelle !"
 Example: "<speed ratio="0.8"/> Prenez bien note. <break time="0.5s"/> C'est important."
 Do not combine multiple tags on the same phrase.
+
+**Nonverbalisms**
+Insert [laughter] in your replies when laugh
 
 `;
 
