@@ -18,6 +18,10 @@ See root `CLAUDE.md` and `docs/ARCHITECTURE.md` for project-wide rules.
 - `presentation/` imports from `application/` and `domain/`
 - New providers: add an adapter in `infrastructure/adapters/`, never touch domain or use cases
 
+## Dependency injection
+
+`apps/api/src/container.ts` wires everything. Provider selection is done at startup via env vars — no dynamic switching at runtime. To swap a provider, change the `TTS_PROVIDER` / `STT_PROVIDER` env var and the container instantiates the matching adapter.
+
 ## Port naming convention
 
 - Port files: `{concern}-port.ts` (e.g., `stt-provider-port.ts`, `calendar-port.ts`)
