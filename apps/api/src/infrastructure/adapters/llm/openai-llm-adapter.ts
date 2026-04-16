@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import type { LlmProviderPort, LlmMessage, LlmTool } from "@/domain/ports/llm-provider-port";
 import type { ToolSet } from "ai";
 
-const DEFAULT_MODEL = "gpt-4o";
+const DEFAULT_MODEL = "gpt-5-mini";
 
 export class OpenAILlmAdapter implements LlmProviderPort {
   constructor(private readonly agentTools: ToolSet = {}) {}
@@ -23,6 +23,7 @@ export class OpenAILlmAdapter implements LlmProviderPort {
         stopWhen: stepCountIs(5),
       }),
       abortSignal: signal,
+      providerOptions: { openai: { reasoningEffort: "minimal" } },
     });
 
     yield* result.textStream;
