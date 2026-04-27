@@ -4,6 +4,10 @@ A real-time voice AI agent that runs in your browser. Talk to **Léa**, an AI as
 
 Built as a monorepo with a strict hexagonal architecture so providers stay swappable and the domain stays clean.
 
+## Demo
+
+<!-- video to upload -->
+
 ## What it does
 
 - Real-time voice conversation via WebSocket streaming
