@@ -82,13 +82,13 @@ Frontend runs on `http://localhost:5173`, backend on `http://localhost:3001`.
 | `LOG_LEVEL`      | No       | `fatal` \| `error` \| `warn` \| `info` \| `debug` \| `trace` (default: `info`) |
 | `AGENT_LANGUAGE` | No       | BCP-47 code (default: `fr`). Use `"multi"` for Deepgram multilingual.          |
 
-**STT — pick one:**
+**STT — set `STT_PROVIDER` and matching key:**
 
-| Variable              | Provider                          |
-| --------------------- | --------------------------------- |
-| `DEEPGRAM_API_KEY`    | Deepgram (streaming, recommended) |
-| `GROQ_API_KEY`        | Groq Whisper (fast, low cost)     |
-| _(none, uses OpenAI)_ | OpenAI Whisper                    |
+| `STT_PROVIDER`   | Additional variables      | Notes                         |
+| ---------------- | ------------------------- | ----------------------------- |
+| `groq` (default) | `GROQ_API_KEY`            | Groq Whisper — fast, low cost |
+| `deepgram`       | `DEEPGRAM_API_KEY`        | WebSocket streaming           |
+| `openai`         | _(uses `OPENAI_API_KEY`)_ |                               |
 
 **TTS — set `TTS_PROVIDER` and matching keys:**
 
