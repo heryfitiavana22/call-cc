@@ -6,7 +6,7 @@ Built as a monorepo with a strict hexagonal architecture so providers stay swapp
 
 ## Demo
 
-<!-- video to upload -->
+https://github.com/user-attachments/assets/de5624c1-cd5c-4cda-bbb6-06ad8bfbbf94
 
 ## What it does
 
