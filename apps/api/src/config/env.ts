@@ -6,39 +6,31 @@ const envSchema = z
     PORT: z.coerce.number().default(3001),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
-    // LLM
+    // LLM — required
     OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
 
-    // BCP-47 language code for the whole app (STT, LLM system prompt, etc.).
-    // Set to "multi" to use Deepgram's multilingual mode (STT only).
+    // Language — BCP-47 code used in STT, LLM system prompt, and TTS (default: fr)
+    // Set to "multi" for Deepgram multilingual mode (STT only)
     AGENT_LANGUAGE: z.string().default("fr"),
 
-    // STT — which provider to use (default: groq)
-    // Switching provider: set STT_PROVIDER and the matching API key.
-    STT_PROVIDER: z.enum(["groq", "deepgram", "openai"]).default("groq"),
-    DEEPGRAM_API_KEY: z.string().optional(),
-    GROQ_API_KEY: z.string().optional(),
-
-    // Tools (each key enables the corresponding tool at runtime)
+    // Tools — each key enables the corresponding tool at runtime
     TAVILY_API_KEY: z.string().optional(),
 
-    // TTS — which provider to use (default: openai)
-    // Switching provider: set TTS_PROVIDER and the matching API key + voice ID.
+    // ── STT ──────────────────────────────────────────────────────────────────
+    STT_PROVIDER: z.enum(["groq", "deepgram", "openai"]).default("groq"),
+    GROQ_API_KEY: z.string().optional(),
+    DEEPGRAM_API_KEY: z.string().optional(),
+
+    // ── TTS ──────────────────────────────────────────────────────────────────
     TTS_PROVIDER: z.enum(["openai", "cartesia", "elevenlabs"]).default("openai"),
-
-    // OpenAI TTS — reuses OPENAI_API_KEY (always required for the LLM anyway)
-
-    // Cartesia TTS — https://cartesia.ai
-    // Voice IDs: https://play.cartesia.ai/voices
+    // openai — reuses OPENAI_API_KEY, no extra key needed
     CARTESIA_API_KEY: z.string().optional(),
     CARTESIA_VOICE_ID: z.string().optional(),
-
-    // ElevenLabs TTS — https://elevenlabs.io
-    // Voice IDs: https://elevenlabs.io/voice-library
     ELEVENLABS_API_KEY: z.string().optional(),
     ELEVENLABS_VOICE_ID: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    // STT key validation
     if (data.STT_PROVIDER === "groq" && !data.GROQ_API_KEY) {
       ctx.addIssue({
         code: "custom",
@@ -55,6 +47,7 @@ const envSchema = z
       });
     }
 
+    // TTS key validation
     if (data.TTS_PROVIDER === "cartesia") {
       if (!data.CARTESIA_API_KEY) {
         ctx.addIssue({
