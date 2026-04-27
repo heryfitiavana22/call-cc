@@ -13,7 +13,9 @@ const envSchema = z
     // Set to "multi" to use Deepgram's multilingual mode (STT only).
     AGENT_LANGUAGE: z.string().default("fr"),
 
-    // STT
+    // STT — which provider to use (default: groq)
+    // Switching provider: set STT_PROVIDER and the matching API key.
+    STT_PROVIDER: z.enum(["groq", "deepgram", "openai"]).default("groq"),
     DEEPGRAM_API_KEY: z.string().optional(),
     GROQ_API_KEY: z.string().optional(),
 
@@ -37,6 +39,22 @@ const envSchema = z
     ELEVENLABS_VOICE_ID: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.STT_PROVIDER === "groq" && !data.GROQ_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["GROQ_API_KEY"],
+        message: "GROQ_API_KEY is required when STT_PROVIDER=groq",
+      });
+    }
+
+    if (data.STT_PROVIDER === "deepgram" && !data.DEEPGRAM_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["DEEPGRAM_API_KEY"],
+        message: "DEEPGRAM_API_KEY is required when STT_PROVIDER=deepgram",
+      });
+    }
+
     if (data.TTS_PROVIDER === "cartesia") {
       if (!data.CARTESIA_API_KEY) {
         ctx.addIssue({

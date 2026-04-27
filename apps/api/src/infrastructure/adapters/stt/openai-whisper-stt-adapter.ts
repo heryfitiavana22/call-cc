@@ -4,6 +4,10 @@ import { err } from "@call-cc/types";
 import type { Transcript } from "@/domain/value-objects/transcript";
 
 class OpenAIWhisperSttStream implements SttStreamPort {
+  constructor() {
+    throw new Error("OpenAIWhisperSttAdapter not yet implemented");
+  }
+
   write(_chunk: ArrayBuffer): void {}
 
   finalize(): Promise<Result<Transcript>> {
