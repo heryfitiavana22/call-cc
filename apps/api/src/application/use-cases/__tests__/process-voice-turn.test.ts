@@ -144,7 +144,7 @@ describe("ProcessVoiceTurn", () => {
         onAudioChunk: vi.fn(),
       });
       const streamArgs = (llm.stream as ReturnType<typeof vi.fn>).mock.calls[0];
-      const messages = streamArgs?.[0] as { role: string; content: string }[];
+      const { messages } = streamArgs?.[0] as { messages: { role: string; content: string }[] };
       expect(messages[0]?.content).toBe("Hi");
       expect(messages[messages.length - 1]?.content).toBe("Bonjour.");
     });
