@@ -136,11 +136,7 @@ export class ProcessVoiceTurn {
     callbacks.onTranscript(transcriptResult.value.text);
 
     // LLM stream → sentence-level TTS
-    const systemMessages: LlmMessage[] = this.systemPrompt
-      ? [{ role: "system", content: this.systemPrompt }]
-      : [];
     const messages: LlmMessage[] = [
-      ...systemMessages,
       ...history,
       { role: "user", content: transcriptResult.value.text },
     ];
@@ -150,7 +146,12 @@ export class ProcessVoiceTurn {
     const llmStart = performance.now();
 
     try {
-      for await (const token of this.llm.stream(messages, [], signal)) {
+      for await (const token of this.llm.stream({
+        messages,
+        tools: [],
+        signal,
+        system: this.systemPrompt,
+      })) {
         agentReply += token;
         buffer += token;
 

@@ -12,7 +12,11 @@ describe.skipIf(!hasRealKey)("OpenAILlmAdapter (integration)", () => {
 
   it("yields at least one token", async () => {
     const tokens: string[] = [];
-    for await (const token of adapter.stream(messages, [], new AbortController().signal)) {
+    for await (const token of adapter.stream({
+      messages,
+      tools: [],
+      signal: new AbortController().signal,
+    })) {
       tokens.push(token);
     }
     expect(tokens.length).toBeGreaterThan(0);
@@ -20,7 +24,11 @@ describe.skipIf(!hasRealKey)("OpenAILlmAdapter (integration)", () => {
 
   it("assembled response is a non-empty string", async () => {
     let reply = "";
-    for await (const token of adapter.stream(messages, [], new AbortController().signal)) {
+    for await (const token of adapter.stream({
+      messages,
+      tools: [],
+      signal: new AbortController().signal,
+    })) {
       reply += token;
     }
     expect(reply.trim().length).toBeGreaterThan(0);
@@ -36,7 +44,11 @@ describe.skipIf(!hasRealKey)("OpenAILlmAdapter (integration)", () => {
     let caughtError: unknown = null;
 
     try {
-      for await (const _token of adapter.stream(longMessages, [], controller.signal)) {
+      for await (const _token of adapter.stream({
+        messages: longMessages,
+        tools: [],
+        signal: controller.signal,
+      })) {
         tokenCount++;
         if (tokenCount >= 3) controller.abort();
       }
@@ -60,7 +72,11 @@ describe.skipIf(!hasRealKey)("OpenAILlmAdapter (integration)", () => {
     ];
 
     let reply = "";
-    for await (const token of adapter.stream(history, [], new AbortController().signal)) {
+    for await (const token of adapter.stream({
+      messages: history,
+      tools: [],
+      signal: new AbortController().signal,
+    })) {
       reply += token;
     }
 
