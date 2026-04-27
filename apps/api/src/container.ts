@@ -5,7 +5,7 @@ import { OpenAILlmAdapter } from "@/infrastructure/adapters/llm/openai-llm-adapt
 import { StartVoiceSession } from "@/application/use-cases/start-voice-session";
 import { ProcessVoiceTurn } from "@/application/use-cases/process-voice-turn";
 import { EndVoiceSession } from "@/application/use-cases/end-voice-session";
-import { GroqSttAdapter } from "./infrastructure/adapters/stt/groq-stt-adapter";
+// import { GroqSttAdapter } from "./infrastructure/adapters/stt/groq-stt-adapter";
 // import { DeepgramSttAdapter } from "./infrastructure/adapters/stt/deepgram-stt-adapter";
 import { buildSystemPrompt, AGENT_TTS_INSTRUCTIONS, type ProsodyMode } from "./config/agent-prompt";
 import { buildAgentTools, type ToolAdapters } from "./infrastructure/adapters/llm/agent-tools";
@@ -14,6 +14,7 @@ import { FakeCalendarAdapter } from "./infrastructure/adapters/tools/fake-calend
 import { FakeContactsAdapter } from "./infrastructure/adapters/tools/fake-contacts-adapter";
 import type { TtsProviderPort } from "./domain/ports/tts-provider-port";
 import { env } from "./config/env";
+import { GroqSttAdapter } from "./infrastructure/adapters/stt/groq-stt-adapter";
 
 /**
  * Builds the TTS adapter based on the TTS_PROVIDER env var.
@@ -44,7 +45,7 @@ const buildTts = (): TtsProviderPort => {
  * The system prompt and ToolSet are built accordingly — no key = no tool.
  */
 const buildContainer = () => {
-  // STT — swap here to change implementation
+  // STT — swap here to change implementation (uncomment GroqSttAdapter to revert to batch)
   const stt = new GroqSttAdapter();
   // const stt = new DeepgramSttAdapter();
   const tts = buildTts();

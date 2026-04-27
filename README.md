@@ -1,38 +1,26 @@
 # call-cc
 
-A real-time voice AI agent that runs in your browser. Talk to an AI assistant, get interrupted, interrupt it back — with tool use (web search, calendar, contacts) and swappable providers for STT, TTS, and LLM.
+A real-time voice AI agent that runs in your browser. Talk to **Léa**, an AI assistant — get interrupted, interrupt her back — with tool use (web search, calendar, contacts) and swappable providers for STT, TTS, and LLM.
 
 Built as a monorepo with a strict hexagonal architecture so providers stay swappable and the domain stays clean.
-
-## Motivation
-
-Platforms like [Vapi](https://vapi.ai), [Bland](https://bland.ai), and [Retell](https://retellai.com) make it easy to ship a voice agent fast — but you're renting their infrastructure, paying per minute, and locked into their provider choices.
-
-**call-cc** is for when you want to own the stack:
-
-- **Self-hosted** — runs on your own infra, no third-party data handling
-- **Provider-agnostic** — swap STT, TTS, and LLM via environment variables, no vendor lock-in
-- **Fully open** — read, fork, and modify every layer, from VAD to WebSocket protocol
-- **Architectural reference** — hexagonal architecture applied to real-time voice AI, with documented decisions
-
-If a managed service fits your needs, use one. This project is for teams and developers who need control, or want to understand how these systems actually work.
 
 ## What it does
 
 - Real-time voice conversation via WebSocket streaming
 - Voice Activity Detection (VAD) with barge-in support — you can interrupt the agent mid-sentence
 - Sentence-level TTS streaming for low first-word latency
-- Tool ecosystem: web search (Tavily), calendar, contacts
+- Conversation history displayed as chat bubbles in the browser
+- Tool ecosystem: web search (Tavily), calendar, contacts (calendar and contacts are simulated)
 - Configurable providers — swap STT, TTS, and LLM via environment variables
 
 ## Architecture
 
-```
+```md
 Browser (React + VAD)
-    ↕ WebSocket (binary audio + JSON messages)
+↕ WebSocket (binary audio + JSON messages)
 Node.js API (Hono)
-    ↕ Adapters
-STT provider → LLM provider → TTS provider
+↕ Adapters
+STT provider → LLM provider (stream) → TTS provider
 ```
 
 The backend follows **hexagonal architecture** (ports & adapters). The domain defines interfaces; adapters implement them. Swapping a provider means adding a new adapter — no domain changes.
@@ -41,23 +29,23 @@ For full architecture decisions, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.
 
 ## Monorepo structure
 
-```
+```md
 call-cc/
 ├── apps/
-│   ├── api/          # Node.js backend (Hono + WebSocket)
-│   └── web/          # React frontend (Vite + Tailwind v4)
+│ ├── api/ # Node.js backend (Hono + WebSocket)
+│ └── web/ # React frontend (Vite + Tailwind v4)
 ├── packages/
-│   ├── types/        # Shared types, Zod schemas, Result type
-│   ├── tsconfig/     # Shared TypeScript configs
-│   └── eslint-config/ # Shared ESLint 9 flat config
-└── docs/             # Architecture decision records
+│ ├── types/ # Shared types, Zod schemas, Result type
+│ ├── tsconfig/ # Shared TypeScript configs
+│ └── eslint-config/ # Shared ESLint 9 flat config
+└── docs/ # Architecture decision records
 ```
 
 ## Tech stack
 
 | Layer    | Technology                               |
 | -------- | ---------------------------------------- |
-| Frontend | React 19, Vite 8, Tailwind v4, Base UI   |
+| Frontend | React 19, Vite 8, Tailwind v4, shadcn/ui |
 | Backend  | Node.js, Hono v4, Vercel AI SDK          |
 | STT      | Deepgram / Groq Whisper / OpenAI Whisper |
 | TTS      | OpenAI / Cartesia / ElevenLabs           |
@@ -135,7 +123,7 @@ pnpm format           # Prettier (write)
 pnpm format:check     # Prettier (check only)
 
 # Integration tests (requires real API keys in .env)
-pnpm --filter @apps/api test:integration
+pnpm --filter @call-cc/api test:integration
 ```
 
 ## Adding a provider
@@ -150,10 +138,10 @@ No domain code changes required.
 
 ## Voice session flow
 
-```
+```md
 IDLE → LISTENING → PROCESSING → SPEAKING
-          ↓              ↓
-          └──── barge-in ┘
+↓ ↓
+└──── barge-in ┘
 ```
 
 - **IDLE** — call not started

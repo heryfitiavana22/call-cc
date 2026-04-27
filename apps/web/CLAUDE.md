@@ -27,18 +27,13 @@ See root `CLAUDE.md` and `docs/ARCHITECTURE.md` for project-wide rules.
 ## Styling
 
 - **Tailwind CSS v4** via `@tailwindcss/vite` plugin (no `tailwind.config.js`)
-- **shadcn/ui** components in `src/components/ui/` — add with `pnpm dlx shadcn@latest add <name>`
-- Use only shadcn CSS variables (`--background`, `--foreground`, `--primary`, `--muted`, etc.)
+- **shadcn/ui** components in `src/components/ui/`
+- Use only shadcn CSS variable `apps/web/src/index.css`
 - Do not add custom CSS variables outside of `index.css` shadcn theme block
-- `index.css` contains only: Tailwind imports + shadcn theme variables + `@layer base` reset
 
 ## shadcn component usage
 
-shadcn components use CVA (class-variance-authority) for variants. Rules:
-
-- Always use the existing variant prop for intent — never override CVA styles via `className`
-- `className` on a shadcn component is for layout only (`w-full`, `mt-2`, `mx-auto`, etc.)
-- Check the component file in `src/components/ui/` before adding className overrides
+shadcn components use CVA (class-variance-authority) for variants.
 
 ```tsx
 // ❌ avoid — overriding what CVA already handles
@@ -47,10 +42,3 @@ shadcn components use CVA (class-variance-authority) for variants. Rules:
 // ✅ use the existing variant
 <Button variant="destructive" />
 ```
-
-## Conversation history
-
-- `useVoiceCall` exposes `messages: Message[]` — array of `{ id, role, text }` objects
-- User messages are added when `{ type: "transcript", final: true }` is received
-- Agent messages are added when `{ type: "agent.reply" }` is received
-- Messages reset on each new call (`startCall()`)

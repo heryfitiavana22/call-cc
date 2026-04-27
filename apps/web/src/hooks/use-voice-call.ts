@@ -92,6 +92,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       logger.debug("Server message received", { type: message.type });
 
       if (message.type === "ready") {
+        // If audio is still playing, defer the transition until the queue is empty
         if (isPlayingRef.current) {
           pendingReadyRef.current = true;
         } else {

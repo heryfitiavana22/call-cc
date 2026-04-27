@@ -46,3 +46,5 @@ pnpm --filter @apps/api test:integration # vitest run on src/infrastructure/ (ne
 ```
 
 ---
+
+- Never add `Co-Authored-By: Claude ...` or any AI attribution trailer to commit messages.
