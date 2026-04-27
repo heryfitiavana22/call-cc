@@ -30,8 +30,7 @@ export const float32ToWav = (float32: Float32Array, sampleRate = 16000): ArrayBu
   view.setUint32(40, dataSize, true);
 
   let offset = 44;
-  for (let i = 0; i < float32.length; i++) {
-    const sample = float32[i] ?? 0;
+  for (const sample of float32) {
     view.setInt16(offset, Math.max(-32768, Math.min(32767, Math.round(sample * 32768))), true);
     offset += 2;
   }

@@ -78,11 +78,11 @@ export const VoiceCall = () => {
         )}
         {!isActive ? (
           <Button onClick={() => void startCall()} className="w-full" size="lg">
-            Démarrer l'appel
+            Démarrer l&apos;appel
           </Button>
         ) : (
           <Button onClick={endCall} variant="destructive" className="w-full" size="lg">
-            Terminer l'appel
+            Terminer l&apos;appel
           </Button>
         )}
       </footer>

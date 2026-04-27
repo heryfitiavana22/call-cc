@@ -120,7 +120,8 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
       return;
     }
 
-    const audioBuffer = audioQueueRef.current.shift()!;
+    const audioBuffer = audioQueueRef.current.shift();
+    if (!audioBuffer) return;
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioContextRef.current.destination);
@@ -233,7 +234,7 @@ export const useVoiceCall = (): UseVoiceCallReturn => {
         ws.close();
       }
     };
-  }, [handleServerMessage, playAudioChunk, send]);
+  }, [handleServerMessage, playAudioChunk, send, stopAllAudio]);
 
   const endCall = useCallback(() => {
     vadRef.current?.pause();

@@ -8,13 +8,17 @@ class OpenAIWhisperSttStream implements SttStreamPort {
     throw new Error("OpenAIWhisperSttAdapter not yet implemented");
   }
 
-  write(_chunk: ArrayBuffer): void {}
+  write(_chunk: ArrayBuffer): void {
+    throw new Error("OpenAIWhisperSttAdapter not yet implemented");
+  }
 
   finalize(): Promise<Result<Transcript>> {
     return Promise.resolve(err(new Error("OpenAIWhisperSttAdapter not yet implemented")));
   }
 
-  abort(): void {}
+  abort(): void {
+    throw new Error("OpenAIWhisperSttAdapter not yet implemented");
+  }
 }
 
 export class OpenAIWhisperSttAdapter implements SttProviderPort {

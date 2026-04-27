@@ -15,10 +15,10 @@ const makeLogger = async (level: "error" | "warn" | "info" | "debug") => {
 
 describe("logger", () => {
   const consoleMocks = {
-    error: vi.spyOn(console, "error").mockImplementation(() => {}),
-    warn: vi.spyOn(console, "warn").mockImplementation(() => {}),
-    info: vi.spyOn(console, "info").mockImplementation(() => {}),
-    debug: vi.spyOn(console, "debug").mockImplementation(() => {}),
+    error: vi.spyOn(console, "error").mockImplementation(() => undefined),
+    warn: vi.spyOn(console, "warn").mockImplementation(() => undefined),
+    info: vi.spyOn(console, "info").mockImplementation(() => undefined),
+    debug: vi.spyOn(console, "debug").mockImplementation(() => undefined),
   };
 
   beforeEach(() => {

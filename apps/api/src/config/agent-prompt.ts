@@ -1,10 +1,10 @@
 import { TOOL_KEYS } from "./tool-keys";
 
-export type EnabledTools = {
+export interface EnabledTools {
   webSearch?: boolean;
   calendar?: boolean;
   contacts?: boolean;
-};
+}
 
 /**
  * Controls which intonation guidance section is injected into the system prompt.

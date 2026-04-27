@@ -304,7 +304,7 @@ describe("AudioStreamHandler", () => {
       handler.onMessage(ws, JSON.stringify({ type: "interrupt" }));
 
       await vi.waitFor(() => capturedSignal !== null && capturedSignal.aborted);
-      expect(capturedSignal!.aborted).toBe(true);
+      expect(capturedSignal).toMatchObject({ aborted: true });
     });
   });
 
